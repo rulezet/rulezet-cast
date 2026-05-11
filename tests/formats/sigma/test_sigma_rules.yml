@@ -1,0 +1,400 @@
+# ============================================================
+# RULECAST — SIGMA TEST SUITE
+#
+# EXPECTED RESULTS (update when adding rules):
+#   Total rules  : 28
+#   Valid        : 18
+#   Invalid      : 10
+#
+# Run with: python3 main.py test → choose sigma → file → 2
+# ============================================================
+
+
+# ============================================================
+# VALID RULES — 18 total
+# ============================================================
+
+# valid_01: minimal valid rule (required fields only)
+title: Valid_Minimal
+status: test
+logsource:
+    category: process_creation
+detection:
+    selection:
+        Image: test.exe
+    condition: selection
+
+---
+
+# valid_02: full metadata — all optional fields populated
+title: Valid_Full_Meta
+id: aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
+status: stable
+description: Detects Mimikatz credential dumping related to CVE-2021-36934
+author: Thomas Patzke
+date: 2022/01/15
+modified: 2023/06/01
+tags:
+    - attack.credential_access
+    - attack.t1003.001
+references:
+    - https://blog.example.com/mimikatz
+    - https://attack.mitre.org/techniques/T1003/001/
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        Image|endswith: '\mimikatz.exe'
+    condition: selection
+falsepositives:
+    - Legitimate security tools
+level: high
+
+---
+
+# valid_03: AND condition across two selections
+title: Valid_Multiple_Conditions
+status: test
+logsource:
+    category: process_creation
+detection:
+    selection_a:
+        CommandLine|contains: '-enc'
+    selection_b:
+        Image|endswith: '\powershell.exe'
+    condition: selection_a and selection_b
+
+---
+
+# valid_04: OR condition
+title: Valid_OR_Condition
+status: test
+logsource:
+    category: process_creation
+detection:
+    sel1:
+        Image|endswith: '\cmd.exe'
+    sel2:
+        Image|endswith: '\powershell.exe'
+    condition: sel1 or sel2
+
+---
+
+# valid_05: NOT condition with filter (filter IS referenced in condition)
+title: Valid_Not_Condition
+status: test
+logsource:
+    category: process_creation
+detection:
+    selection:
+        CommandLine|contains: 'whoami'
+    filter:
+        User: 'SYSTEM'
+    condition: selection and not filter
+
+---
+
+# valid_06: contains|all modifier
+title: Valid_All_Modifiers
+status: test
+logsource:
+    category: process_creation
+detection:
+    selection:
+        CommandLine|contains|all:
+            - '-nop'
+            - '-enc'
+            - '-w hidden'
+    condition: selection
+
+---
+
+# valid_07: endswith modifier
+title: Valid_Endswith_Modifier
+status: test
+logsource:
+    category: process_creation
+detection:
+    selection:
+        Image|endswith: '\mimikatz.exe'
+    condition: selection
+
+---
+
+# valid_08: startswith modifier
+title: Valid_Startswith_Modifier
+status: test
+logsource:
+    category: process_creation
+detection:
+    selection:
+        CommandLine|startswith: 'powershell -'
+    condition: selection
+
+---
+
+# valid_09: regex modifier
+title: Valid_RE_Modifier
+status: test
+logsource:
+    category: process_creation
+detection:
+    selection:
+        CommandLine|re: '^(cmd|powershell)\.exe'
+    condition: selection
+
+---
+
+# valid_10: logsource with product
+title: Valid_Logsource_Product
+status: test
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        Image: 'test.exe'
+    condition: selection
+
+---
+
+# valid_11: logsource with service
+title: Valid_Logsource_Service
+status: test
+logsource:
+    product: windows
+    service: security
+detection:
+    selection:
+        EventID: 4624
+    condition: selection
+
+---
+
+# valid_12: MITRE ATT&CK tags
+title: Valid_Tags_ATTCK
+status: test
+tags:
+    - attack.execution
+    - attack.t1059.001
+    - attack.defense_evasion
+logsource:
+    category: process_creation
+detection:
+    selection:
+        Image: test.exe
+    condition: selection
+
+---
+
+# valid_13: critical level
+title: Valid_Level_Critical
+status: test
+level: critical
+logsource:
+    category: process_creation
+detection:
+    selection:
+        Image: test.exe
+    condition: selection
+
+---
+
+# valid_14: experimental status
+title: Valid_Status_Experimental
+status: experimental
+logsource:
+    category: process_creation
+detection:
+    selection:
+        Image: test.exe
+    condition: selection
+
+---
+
+# valid_15: multiple CVEs in description (tests CVE extraction)
+title: Valid_CVE_In_Description
+status: test
+description: Detects exploitation of CVE-2021-44228 and CVE-2023-12345 via JNDI
+logsource:
+    category: process_creation
+detection:
+    selection:
+        CommandLine|contains: 'jndi:'
+    condition: selection
+
+---
+
+# valid_16: EventID list
+title: Valid_EventID_List
+status: test
+logsource:
+    product: windows
+    service: security
+detection:
+    selection:
+        EventID:
+            - 4624
+            - 4625
+            - 4648
+    condition: selection
+
+---
+
+# valid_17: falsepositives list
+title: Valid_Falsepositives
+status: test
+logsource:
+    category: process_creation
+detection:
+    selection:
+        Image: test.exe
+    condition: selection
+falsepositives:
+    - Legitimate admin tool
+    - Security testing
+
+---
+
+# valid_18: complex — full metadata + multiple techniques
+title: Valid_Complex_Full
+id: 12345678-1234-1234-1234-123456789abc
+status: stable
+description: Detects suspicious PowerShell execution with encoded commands
+author: RuleCast Tester
+date: 2024/01/01
+modified: 2024/06/15
+tags:
+    - attack.execution
+    - attack.t1059.001
+    - attack.defense_evasion
+    - attack.t1027
+references:
+    - https://example.com/ps-encoded
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection_img:
+        Image|endswith:
+            - '\powershell.exe'
+            - '\pwsh.exe'
+    selection_cli:
+        CommandLine|contains:
+            - ' -enc '
+            - ' -EncodedCommand '
+    condition: selection_img and selection_cli
+falsepositives:
+    - Legitimate admin scripts
+level: high
+
+
+# ============================================================
+# INVALID RULES — 11 total
+# ============================================================
+
+---
+
+# invalid_01: missing title (required by JSON schema)
+status: test
+logsource:
+    category: process_creation
+detection:
+    selection:
+        Image: test.exe
+    condition: selection
+
+---
+
+# invalid_02: missing detection block (required by JSON schema)
+title: Invalid_No_Detection
+status: test
+logsource:
+    category: process_creation
+
+---
+
+# invalid_03: missing logsource (required by JSON schema)
+title: Invalid_No_Logsource
+status: test
+detection:
+    condition: selection
+
+---
+
+# invalid_04: bad YAML syntax
+title: [unclosed bracket
+
+---
+
+# invalid_05: detection block with no condition (caught by pySigma)
+title: Invalid_Detection_No_Condition
+status: test
+logsource:
+    category: process_creation
+detection:
+    selection:
+        Image: test.exe
+
+---
+
+# invalid_06: invalid level value (caught by JSON schema enum)
+title: Invalid_Bad_Level
+status: test
+level: EXTREME
+logsource:
+    category: process_creation
+detection:
+    selection:
+        Image: test.exe
+    condition: selection
+
+---
+
+# invalid_07: dangling detection — filter defined but not referenced (pySigma HIGH)
+title: Invalid_Dangling_Condition
+status: test
+logsource:
+    category: process_creation
+detection:
+    selection:
+        CommandLine|contains: 'whoami'
+    filter:
+        User: admin
+    condition: selection
+
+---
+
+# invalid_08: invalid status value (caught by JSON schema enum)
+title: Invalid_Bad_Status
+status: very_stable
+logsource:
+    category: process_creation
+detection:
+    selection:
+        Image: test.exe
+    condition: selection
+
+---
+
+# invalid_09: title is a number, not a string (JSON schema type check)
+title: 42
+status: test
+logsource:
+    category: process_creation
+detection:
+    condition: selection
+
+---
+
+# invalid_10: not YAML — looks like a YARA rule
+rule Invalid_Not_YAML {
+    condition:
+        true
+}
+
+---
+
+# invalid_11: empty-ish document (only a comment)
+# This document has no YAML keys at all
