@@ -41,6 +41,9 @@ pip install -r requirements.txt
 python3 main.py
 ```
 
+<img width="703" height="488" alt="Screenshot from 2026-05-11 11-56-13" src="https://github.com/user-attachments/assets/1eb2ba37-74e9-478a-84e1-ac5bde20cc73" />
+
+
 **Direct commands:**
 ```bash
 # Parse a rule from text
