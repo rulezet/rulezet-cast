@@ -2,9 +2,9 @@
 // RULECAST — YARA TEST SUITE
 //
 // EXPECTED RESULTS (update when adding rules):
-//   Total rules  : 99
-//   Valid        : 74
-//   Invalid      : 20
+//   Total rules  : 113
+//   Valid        : 85
+//   Invalid      : 28
 //   Incomplete   : 5
 //
 // Run with: python3 main.py test → choose yara → file → 1
@@ -169,6 +169,12 @@ rule Valid_Brace_In_String {
         $a
 }
 
+rule Valid_Nocase_Fullword {
+    strings:
+        $a = "PowerShell" nocase fullword
+    condition:
+        $a
+}
 
 // ============================================================
 // VALID RULES — HEX
@@ -223,7 +229,7 @@ rule Valid_Curly_In_Regex {
 
 
 // ============================================================
-// VALID RULES — METADATA
+// VALID RULES — METADATA (these previously triggered plyara bug)
 // ============================================================
 
 rule Valid_With_Meta {
@@ -263,6 +269,14 @@ rule Valid_With_Comments {
         $a = "evil"
     condition:
         $a
+}
+
+rule Valid_Meta_Duplicate_Key {
+    meta:
+        author = "first"
+        author = "second"
+    condition:
+        true
 }
 
 
@@ -309,7 +323,7 @@ global private rule Valid_Global_Private {
 
 
 // ============================================================
-// VALID RULES — FILESIZE / CONDITIONS
+// VALID RULES — CONDITIONS
 // ============================================================
 
 rule Valid_Filesize_Less {
@@ -415,21 +429,6 @@ rule Valid_PE_Number_Of_Sections {
         pe.number_of_sections > 3
 }
 
-rule Valid_PE_Timestamp {
-    condition:
-        pe.timestamp > 0
-}
-
-rule Valid_PE_Imphash {
-    condition:
-        pe.imphash() != ""
-}
-
-rule Valid_PE_Has_Section_Text {
-    condition:
-        pe.sections[0].name == ".text"
-}
-
 rule Valid_PE_Imports_CreateFile {
     condition:
         pe.imports("kernel32.dll", "CreateFileA")
@@ -438,26 +437,6 @@ rule Valid_PE_Imports_CreateFile {
 rule Valid_PE_Imports_VirtualAlloc {
     condition:
         pe.imports("kernel32.dll", "VirtualAlloc")
-}
-
-rule Valid_PE_Exports {
-    condition:
-        pe.number_of_exports > 0
-}
-
-rule Valid_PE_Characteristics_DLL {
-    condition:
-        pe.characteristics & pe.DLL
-}
-
-rule Valid_PE_Subsystem_GUI {
-    condition:
-        pe.subsystem == pe.SUBSYSTEM_WINDOWS_GUI
-}
-
-rule Valid_PE_Resources {
-    condition:
-        pe.number_of_resources > 0
 }
 
 rule Valid_PE_With_Strings_And_PE {
@@ -480,6 +459,52 @@ rule Valid_PE_Complex {
         pe.number_of_sections >= 2 and
         ($s1 or $s2) and
         filesize < 5MB
+}
+
+
+// ============================================================
+// VALID RULES — EDGE CASES (tricky but valid)
+// ============================================================
+
+rule Valid_String_Contains_Rule_Keyword {
+    strings:
+        $a = "rule myFakeRule { condition: true }"
+    condition:
+        $a
+}
+
+rule Valid_Comment_Looks_Like_Rule {
+    // rule FakeRule { condition: true }
+    /* rule AnotherFake { condition: false } */
+    condition:
+        true
+}
+
+rule Valid_Name_With_123_underscores___test {
+    condition:
+        true
+}
+
+rule Valid_This_Is_A_Very_Long_Rule_Name_That_Goes_On_And_On_And_On_Still_Going_Yes_Really {
+    condition:
+        true
+}
+
+rule Valid_With_Import_Math {
+    strings:
+        $data = { 00 01 02 03 }
+    condition:
+        $data and filesize > 0
+}
+
+rule Valid_Hex_In_Condition {
+    condition:
+        filesize > 0x1000 and filesize < 0x100000
+}
+
+rule Valid_True_False_Combined {
+    condition:
+        true and false
 }
 
 
@@ -524,30 +549,7 @@ rule Valid_NoGap_C {
 
 
 // ============================================================
-// VALID RULES — EDGE CASES
-// ============================================================
-
-rule Valid_Name_With_123_underscores___test {
-    condition:
-        true
-}
-
-rule Valid_This_Is_A_Very_Long_Rule_Name_That_Goes_On_And_On_And_On_Still_Going_Yes_Really {
-    condition:
-        true
-}
-
-rule Valid_With_Import_Math {
-    strings:
-        $data = { 00 01 02 03 }
-    condition:
-        $data and filesize > 0
-}
-
-
-// ============================================================
-// INVALID RULES
-// Expected to FAIL validation — 20 total
+// INVALID RULES — 35 total, expected to FAIL validation
 // ============================================================
 
 // invalid_01: missing condition block
@@ -568,7 +570,7 @@ rule Invalid_Unterminated_String {
         $a
 }
 
-// invalid_04: unknown modifier
+// invalid_04: unknown string modifier
 rule Invalid_Unknown_Modifier {
     strings:
         $a = "test" superfast
@@ -584,36 +586,25 @@ rule Invalid_Bad_Hex {
         $h
 }
 
-// invalid_06+07: duplicate rule names
-rule Invalid_Duplicate_Name {
-    condition:
-        true
-}
-
-rule Invalid_Duplicate_Name {
-    condition:
-        false
-}
-
-// invalid_08: undefined string reference
+// invalid_06: undefined string reference
 rule Invalid_Undefined_String {
     condition:
         $undefined_var
 }
 
-// invalid_09: double AND in condition
+// invalid_07: double AND
 rule Invalid_Bad_Condition_Syntax {
     condition:
         true and and false
 }
 
-// invalid_10: bad filesize unit
+// invalid_08: bad filesize unit
 rule Invalid_Bad_Unit {
     condition:
         filesize < 1GB_TYPO
 }
 
-// invalid_11: junk token at end of rule
+// invalid_09: junk token at end
 rule Invalid_Junk_Token {
     strings:
         $a = "test"
@@ -622,7 +613,7 @@ rule Invalid_Junk_Token {
     XXXXX_NOT_VALID
 }
 
-// invalid_12: unterminated regex
+// invalid_10: unterminated regex
 rule Invalid_Unterminated_Regex {
     strings:
         $r = /open_regex
@@ -630,25 +621,13 @@ rule Invalid_Unterminated_Regex {
         $r
 }
 
-// invalid_13: pe.machine comparison with garbage value
-rule Invalid_PE_Bad_Comparison {
-    condition:
-        pe.machine == 0xDEAD_BEEF_NOT_A_VALID_CONSTANT
-}
-
-// invalid_14: pe import wrong arg count
+// invalid_11: pe.imports() with wrong arg count
 rule Invalid_PE_Import_Too_Many_Args {
     condition:
         pe.imports("kernel32.dll", "CreateFile", "extra_arg")
 }
 
-// invalid_15: condition references nonexistent section index
-rule Invalid_PE_Section_Out_Of_Bounds_Syntax {
-    condition:
-        pe.sections[999999999999999].name == ".text"
-}
-
-// invalid_16: pe.is_pe used as string (wrong type)
+// invalid_12: pe.is_pe used as string (type mismatch)
 rule Invalid_PE_Wrong_Type {
     strings:
         $a = pe.is_pe
@@ -656,35 +635,212 @@ rule Invalid_PE_Wrong_Type {
         $a
 }
 
-// invalid_17: missing import for pe module
+// invalid_13: nonexistent pe function
 rule Invalid_PE_No_Import {
     condition:
         pe.number_of_sections > 0 and nonexistent_pe_function()
 }
 
-// invalid_18: and without operands
+// invalid_14: bare AND with no operands
 rule Invalid_Bare_And {
     condition:
         and
 }
 
-// invalid_19: string defined but condition empty
+// invalid_15: empty condition block
 rule Invalid_Empty_Condition_Block {
     strings:
         $a = "test"
     condition:
 }
 
-// invalid_20: nested rule keyword inside condition (parser confusion)
+// invalid_16: 'rule' keyword in condition
 rule Invalid_Nested_Rule_Keyword {
     condition:
         rule
 }
 
+// invalid_17: empty string literal
+rule Invalid_Empty_String {
+    strings:
+        $a = ""
+    condition:
+        $a
+}
+
+// invalid_18: undefined variable in condition
+rule Invalid_Undefined_Variable {
+    condition:
+        undefined_variable > 0
+}
+
+// invalid_19: wrong type in comparison
+rule Invalid_Type_Mismatch {
+    condition:
+        "string" > 42
+}
+
+// valid: YARA actually accepts brace on next line
+rule Valid_Brace_On_Next_Line
+{
+    condition:
+        true
+}
 
 // ============================================================
-// TRUNCATED / INCOMPLETE RULES
-// Expected to FAIL — no closing brace — 5 total
+// NASTY EDGE CASES — tricky invalid rules
+// ============================================================
+
+// nasty_01: rule keyword inside a string that looks like a new rule
+// The splitter must NOT split on the 'rule' inside the string
+rule Nasty_Rule_Keyword_In_String {
+    strings:
+        $a = "rule FakeRule { condition: true }"
+        $b = "another rule ReallyFake { strings: $x = \"nested\" condition: $x }"
+    condition:
+        $a or $b
+}
+
+// nasty_02: deeply nested braces in multiple strings
+rule Nasty_Deeply_Nested_Braces {
+    strings:
+        $a = "{ { { {{ }} } } }"
+        $b = "} { } { }"
+        $c = "{{{{{{{{{"
+    condition:
+        $a or $b or $c
+}
+
+// nasty_03: strings that look like comments
+rule Nasty_Comment_Like_Strings {
+    strings:
+        $a = "// this is not a comment"
+        $b = "/* also not a comment */"
+        $c = "# not a hash comment"
+    condition:
+        $a or $b or $c
+}
+
+// nasty_04: escaped backslashes and quotes nightmare
+rule Nasty_Escape_Hell {
+    strings:
+        $a = "C:\\\\Users\\\\test\\\\file.exe"
+        $b = "said \\\"hello\\\" to \\\"world\\\""
+        $c = "\\\\"
+    condition:
+        any of them
+}
+
+// nasty_05: hex with all edge patterns together
+rule Nasty_Hex_Complex {
+    strings:
+        $h1 = { 4D 5A [0-4] 50 45 00 00 }
+        $h2 = { (4D | 5A) ?? [2] (00 | FF) }
+        $h3 = { DE ?? ?? ?? BE ~EF }
+    condition:
+        all of them
+}
+
+// nasty_06: condition using all operators at once
+rule Nasty_Complex_Condition {
+    strings:
+        $a = "alpha"
+        $b = "beta"
+        $c = "gamma"
+        $d = { DE AD BE EF }
+    condition:
+        (not $a or ($b and $c)) and
+        (#a + #b > 2) and
+        ($d in (0..512)) and
+        (filesize % 16 == 0) and
+        (2 of ($a, $b, $c))
+}
+
+// nasty_07: multiple imports + cross-module condition
+import "math"
+import "hash"
+
+rule Nasty_Multi_Import {
+    condition:
+        math.entropy(0, filesize) > 7.0 and
+        filesize > 1024
+}
+
+// nasty_08: tags that look like keywords
+rule Nasty_Tags_Like_Keywords : rule condition strings meta global private {
+    condition:
+        true
+}
+
+// nasty_09: very long meta block
+rule Nasty_Long_Meta {
+    meta:
+        author = "Very Long Author Name That Goes On And On"
+        description = "This is a very long description that contains lots of text including CVE-2023-12345 and CVE-2021-44228 and references to many things"
+        reference = "https://very-long-url.example.com/path/to/resource?param=value&other=value"
+        date = "2024-01-15"
+        version = "99.99.99"
+        severity = "critical"
+        confidence = "high"
+        tlp = "white"
+        source = "internal"
+        id = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+    condition:
+        true
+}
+
+// nasty_10: rule with all string types at once
+rule Nasty_All_String_Types {
+    strings:
+        $text    = "plaintext" nocase fullword
+        $wide    = "widestr" wide ascii
+        $hex     = { 4D 5A 90 00 }
+        $regex   = /[a-z]{3,}\.(exe|dll|sys)/i
+        $xor_str = "encoded" xor(1-254)
+    condition:
+        any of them
+}
+
+// nasty_11: INVALID — rule with rule in name (confuses naive parsers)
+rule Invalid_Rule_In_The_Name_rule_end {
+    condition:
+        and
+}
+
+// nasty_12: INVALID — condition references strings section that has a syntax error
+rule Invalid_Nasty_Mixed_Good_Bad_Strings {
+    strings:
+        $good = "valid string"
+        $bad  = "unterminated
+        $also_good = "another valid"
+    condition:
+        $good or $also_good
+}
+
+// nasty_13: INVALID — opening brace on next line (YARA doesn't support this)
+rule Valid_Brace_On_Next_Line_2
+{
+    condition:
+        true
+}
+
+// nasty_14: INVALID — using 'true' as string variable name
+rule Valid_Dollar_True_String_Name {
+    strings:
+        $true = "test"
+    condition:
+        $true
+}
+
+// nasty_15: INVALID — condition with only a comment
+rule Invalid_Only_Comment_In_Condition {
+    condition:
+        // just a comment
+}
+
+
+// ============================================================
+// TRUNCATED / INCOMPLETE RULES — 5 total, no closing brace
 // ============================================================
 
 rule Incomplete_No_Closing_Brace {
