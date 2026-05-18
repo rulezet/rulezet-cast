@@ -1,0 +1,158 @@
+# ============================================================
+# RULECAST — SURICATA TEST SUITE
+#
+# EXPECTED RESULTS (update when adding rules):
+#   Total rules  : 35
+#   Valid        : 28
+#   Invalid      : 7
+#
+# Valid = 15 original + 8 new Valid_ + 5 Nasty_ (all accepted by suricataparser)
+# Invalid = 5 original + 2 new truncated-header cases
+# Nasty_ rules have no pass/fail assertion — they observe edge-case behaviour
+#
+# Run with: python3 main.py test → choose suricata → file → 3
+# ============================================================
+
+
+# ============================================================
+# VALID RULES — BASIC
+# ============================================================
+
+alert tcp $HOME_NET any -> $EXTERNAL_NET any (msg:"Valid_Basic TCP Alert"; sid:9000001; rev:1;)
+
+alert udp $HOME_NET any -> $EXTERNAL_NET 53 (msg:"Valid_UDP DNS Outbound"; sid:9000002; rev:1;)
+
+alert icmp any any -> $HOME_NET any (msg:"Valid_ICMP Ping Sweep Detection"; itype:8; threshold:type both,track by_src,count 10,seconds 5; sid:9000003; rev:2;)
+
+drop tcp $EXTERNAL_NET any -> $HTTP_SERVERS $HTTP_PORTS (msg:"Valid_Drop Inbound HTTP Exploit Attempt"; flow:established,to_server; content:"cmd.exe"; nocase; sid:9000004; rev:1;)
+
+
+# ============================================================
+# VALID RULES — NETWORK & APPLICATION LAYER
+# ============================================================
+
+alert http $EXTERNAL_NET any -> $HTTP_SERVERS $HTTP_PORTS (msg:"Valid_HTTP Malware Download Attempt"; flow:established,to_server; content:"GET"; http_method; content:".exe"; http_uri; classtype:trojan-activity; sid:9000005; rev:3;)
+
+alert dns $HOME_NET any -> any 53 (msg:"Valid_DNS Query to Known Malicious Domain"; dns.query; content:"malware-c2.example.com"; nocase; classtype:bad-unknown; sid:9000006; rev:1;)
+
+alert tls $EXTERNAL_NET any -> $HOME_NET any (msg:"Valid_TLS Certificate with Suspicious CN"; tls.cert_subject; content:"CN=evil.example"; nocase; classtype:bad-unknown; sid:9000007; rev:2;)
+
+alert http $HOME_NET any -> $EXTERNAL_NET any (msg:"Valid_Suspicious HTTP User-Agent"; flow:established,to_server; content:"User-Agent|3a 20|python-requests"; http_header; classtype:policy-violation; sid:9000008; rev:1;)
+
+alert tcp $EXTERNAL_NET any -> $HOME_NET 445 (msg:"Valid_SMB EternalBlue Exploit Attempt"; flow:established,to_server; content:"|ff|SMB"; depth:5; content:"|73 00|"; distance:0; classtype:attempted-admin; sid:9000009; rev:4;)
+
+
+# ============================================================
+# VALID RULES — REFERENCES & CVE EXTRACTION
+# ============================================================
+
+alert http $EXTERNAL_NET any -> $HTTP_SERVERS $HTTP_PORTS (msg:"Valid_Log4Shell Exploitation CVE-2021-44228"; flow:established,to_server; content:"${jndi:"; nocase; http_uri; reference:cve,2021-44228; reference:url,attack.mitre.org/techniques/T1190; classtype:attempted-admin; sid:9000010; rev:5; metadata:affected_product Apache_Log4j, created_at 2021_12_10, severity critical;)
+
+alert http $EXTERNAL_NET any -> $HTTP_SERVERS $HTTP_PORTS (msg:"Valid_ProxyLogon Exchange RCE CVE-2021-26855"; flow:established,to_server; content:"/owa/auth/"; http_uri; content:"X-BEResource"; http_header; reference:cve,2021-26855; reference:cve,2021-27065; classtype:attempted-admin; sid:9000011; rev:3;)
+
+alert tcp $EXTERNAL_NET any -> $HOME_NET 4444 (msg:"Valid_Metasploit Default Meterpreter Port"; flow:established,to_server; content:"|fc e8 8f 00 00 00|"; depth:6; reference:url,www.metasploit.com; classtype:shellcode-detect; sid:9000012; rev:2;)
+
+
+# ============================================================
+# VALID RULES — ADVANCED OPTIONS
+# ============================================================
+
+alert http any any -> any any (msg:"Valid_PCRE Obfuscated PowerShell Download Cradle"; flow:established,to_server; pcre:"/(?:powershell|pwsh).*(?:-enc|-encodedcommand)/i"; http_client_body; classtype:trojan-activity; sid:9000013; rev:2;)
+
+alert tcp $EXTERNAL_NET any -> $HOME_NET any (msg:"Valid_Multiple Content Anchors Ransomware"; flow:established,to_server; content:"ENCRYPTED"; offset:0; depth:9; content:"RANSOM"; distance:100; within:200; classtype:trojan-activity; sid:9000014; rev:1;)
+
+alert http $HOME_NET any -> $EXTERNAL_NET any (msg:"Valid_Cobalt Strike Beacon Checkin"; flow:established,to_server; content:"GET"; http_method; content:"/submit.php"; http_uri; content:"Cookie|3a|"; http_header; pcre:"/Cookie\x3a\s[a-zA-Z0-9+\/]{32,}={0,2}/H"; classtype:trojan-activity; sid:9000015; rev:6; metadata:created_at 2020_01_01, updated_at 2023_06_15;)
+
+
+# ============================================================
+# INVALID RULES — SYNTAX ERRORS
+# ============================================================
+
+# Invalid: missing closing parenthesis — suricataparser cannot complete option parsing
+alert tcp $HOME_NET any -> $EXTERNAL_NET any (msg:"Invalid_Missing Closing Parenthesis"; sid:9001001; rev:1;
+
+# Invalid: unrecognized action keyword — not a valid Suricata action
+BADACTION tcp $HOME_NET any -> $EXTERNAL_NET any (msg:"Invalid_Unknown Action Keyword"; sid:9001002; rev:1;)
+
+# Invalid: no options block at all — msg sits outside parentheses so regex still names it
+alert tcp $HOME_NET any -> $EXTERNAL_NET any msg:"Invalid_Missing Options Parentheses"; sid:9001003
+
+# Invalid: second missing-paren variant to confirm different option sets also fail
+alert udp any any -> any 53 (msg:"Invalid_UDP Rule Missing End Paren"; dns.query; content:"test"; sid:9001004; rev:1;
+
+# Invalid: completely garbled — msg field anywhere in text is enough for the regex to name it
+GARBAGE DATA msg:"Invalid_Garbled Non-Rule Content"; sid:9001005
+
+
+# ============================================================
+# CVE EXTRACTION EDGE CASES
+# ============================================================
+
+# CVE mentioned only inside the msg string — no reference keyword at all
+# Parser must extract it via _CVE_RE scan of title, not from reference options
+alert http any any -> any any (msg:"Valid_CVE Only In Msg No Reference CVE-2022-30190"; sid:9000016; rev:1;)
+
+# reference:cve value already carries the CVE- prefix — must NOT produce CVE-CVE-2022-30190
+alert http any any -> any any (msg:"Valid_CVE Full Prefix Already In Reference Value"; reference:cve,CVE-2022-30190; sid:9000017; rev:1;)
+
+# Same CVE appears in both msg text AND a reference:cve keyword
+# vulnerabilities list must contain exactly one entry (set deduplication)
+alert http any any -> any any (msg:"Valid_CVE Dedup Msg And Reference CVE-2021-44228"; reference:cve,2021-44228; sid:9000018; rev:1;)
+
+# Three distinct CVEs from three separate reference keywords
+# All three must appear in vulnerabilities, sorted
+alert http any any -> any any (msg:"Valid_Three Distinct CVEs Multiple References"; reference:cve,2019-19781; reference:cve,2020-14882; reference:cve,2021-21985; classtype:attempted-admin; sid:9000019; rev:2;)
+
+# Mixed reference types in same rule — bugtraq and url must land in references[], not vulnerabilities[]
+alert tcp any any -> any any (msg:"Valid_Mixed Reference Types Bugtraq And URL"; reference:bugtraq,12345; reference:url,www.securityfocus.com/bid/12345; sid:9000020; rev:1;)
+
+
+# ============================================================
+# SID / UUID EDGE CASES
+# ============================================================
+
+# Very large SID (Suricata max is 2^32-1 = 4294967295) — must not overflow str conversion
+alert tcp any any -> any any (msg:"Valid_Very Large SID Near Uint32 Max"; sid:4000000000; rev:1;)
+
+# No classtype keyword — tags list and description must be empty, not crash
+alert tcp any any -> any any (msg:"Valid_No Classtype So Tags And Description Empty"; content:"suspicious-pattern"; sid:9000022; rev:1;)
+
+
+# ============================================================
+# HEADER VARIETY
+# ============================================================
+
+# Negated source IP with port group in brackets — complex header must parse cleanly
+alert tcp !$HOME_NET [1024:65535] -> $HTTP_SERVERS [80,443,8080] (msg:"Valid_Negated IP And Bracket Port Group"; flow:established,to_server; content:"exploit"; classtype:attempted-user; sid:9000023; rev:1;)
+
+
+# ============================================================
+# NASTY RULES — EDGE CASES (no pass/fail assertion, behaviour observed)
+# ============================================================
+
+# No sid keyword at all — original_uuid must be None, not crash or pick up wrong number
+alert tcp any any -> any any (msg:"Nasty_No SID UUID Must Be None"; content:"test_payload"; rev:1;)
+
+# Empty msg string — regex extracts "" (falsy) so title falls back to "Untitled Suricata Rule"
+# Rule will appear as "Untitled Suricata Rule" in the test runner — that is expected
+alert tcp any any -> any any (msg:""; sid:9002002; rev:1;)
+
+# Duplicate sid keywords in the same rule — which value wins in suricataparser?
+alert tcp any any -> any any (msg:"Nasty_Duplicate SID Which Value Wins"; sid:9002003; sid:9002099; rev:1;)
+
+# CVE with a short 4-digit vuln number (CVE-2021-1234) — regex pattern is \d{4,7}, must match
+alert tcp any any -> any any (msg:"Nasty_CVE Short 4 Digit Vuln Number"; reference:cve,2021-1234; sid:9002004; rev:1;)
+
+# Disabled rule (starts with #) — split_rules() keeps it, suricataparser parses with enabled=False
+# alert tcp any any -> any any (msg:"Nasty_Disabled Rule Parsed With Enabled False"; content:"test"; sid:9002005; rev:1;)
+
+
+# ============================================================
+# ADDITIONAL INVALID — TRUNCATED HEADERS (msg sits outside options so regex still names them)
+# ============================================================
+
+# Invalid: action keyword only, no protocol/header/options — parse_rules() returns []
+alert msg:"Invalid_Action Only No Header Or Options"
+
+# Invalid: action + protocol only, missing src/dst/direction/options — parse_rules() returns []
+alert tcp msg:"Invalid_Action And Proto Only Truncated"
