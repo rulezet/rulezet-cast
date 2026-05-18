@@ -47,6 +47,7 @@ TEST_FILES = {
     # "5": ("wazuh",    os.path.join(SCRIPT_DIR, "formats", "wazuh",    "test_wazuh_rules.xml")),
     # "6": ("nse",      os.path.join(SCRIPT_DIR, "formats", "nse",      "test_nse_scripts.nse")),
     # "7": ("crs",      os.path.join(SCRIPT_DIR, "formats", "crs",      "test_crs_rules.conf")),
+    "8": ("nse", os.path.join(SCRIPT_DIR, "formats", "nse", "test_nse_rules.nse")),
 }
 
 # ── expected counts from file header ─────────────────────────────────────────

@@ -229,7 +229,14 @@ python3 main.py new sigma
 python3 -m utils.scaffold sigma
 ```
 
-This creates `parsers/formats/sigma_parser.py` with all methods stubbed and correct imports.
+This does three things automatically:
+
+1. Creates `parsers/formats/sigma_parser.py` with all five methods stubbed and correct imports
+2. Registers `SigmaParser()` in `parsers/__init__.py → ALL_PARSERS`
+3. Creates `tests/formats/sigma/test_sigma_rules.sigma` — an empty fixture with the correct section structure and naming conventions already in place
+4. Registers the fixture in `tests/test_runner.py → TEST_FILES` under the next available key
+
+You only need to fill in the code and the test rules.
 
 ### 6.2 — Install dependencies
 
@@ -358,52 +365,38 @@ python3 main.py parse -t 'your rule here'
 
 ## 7. Writing tests
 
-### 7.1 — Create a test fixture file
+### 7.1 — Fill in the test fixture
 
-Create `tests/formats/test_sigma_rules.yml` following the same structure as `test_yara_rules.yar`:
+`python3 main.py new <format>` already created the fixture at:
 
-```yaml
-# ============================================================
-# RULECAST — SIGMA TEST SUITE
-#
+```
+tests/formats/<format>/test_<format>_rules.<format>
+```
+
+Open it and add rules. The file contains three sections with instructions:
+
+| Section | Naming prefix | Expectation |
+|---------|--------------|-------------|
+| Valid rules | `Valid_` | `validate()` must return `ok=True` |
+| Invalid rules | `Invalid_` | `validate()` must return `ok=False` |
+| Nasty / edge cases | `Nasty_` | No expectation — result is just observed |
+
+The prefix is read from `parse() → identity.name`. Make sure your parser sets that field correctly so the test runner can match it.
+
+Once you have added rules, update the `EXPECTED RESULTS` header:
+
+```
 # EXPECTED RESULTS (update when adding rules):
 #   Total rules  : 20
 #   Valid        : 15
 #   Invalid      : 5
-#   Incomplete   : 0
-# ============================================================
-
-# --- valid rule ---
-title: Valid Minimal
-status: test
-logsource:
-    category: process_creation
-detection:
-    condition: selection
-    selection:
-        Image|endswith: '\cmd.exe'
-
----
-
-# --- invalid rule (missing detection) ---
-title: Invalid No Detection
-status: test
-logsource:
-    category: process_creation
 ```
 
-The `EXPECTED RESULTS` header is parsed automatically by the test runner to verify counts.
+The test runner compares actual counts against these numbers and reports `✓` or `✗`.
 
-### 7.2 — Register the test file in test_runner.py
+### 7.2 — Registration (already done)
 
-Open `tests/test_runner.py` and uncomment (or add) your format in `TEST_FILES`:
-
-```python
-TEST_FILES = {
-    "1": ("yara",  os.path.join(SCRIPT_DIR, "formats", "test_yara_rules.yar")),
-    "2": ("sigma", os.path.join(SCRIPT_DIR, "formats", "test_sigma_rules.yml")),  # ← add
-}
-```
+`python3 main.py new <format>` also registered the fixture in `tests/test_runner.py → TEST_FILES`. You do not need to touch that file.
 
 ### 7.3 — Run the test runner
 
@@ -444,11 +437,11 @@ These are non-negotiable. PRs that violate them will be asked to change.
 
 Before opening a PR, verify:
 
-- [ ] `parsers/formats/myformat_parser.py` created and all 6 methods implemented
-- [ ] `parsers/__init__.py` updated with your parser in `ALL_PARSERS`
+- [ ] `python3 main.py new <format>` was run — parser, fixture, and TEST_FILES entry all created
+- [ ] All five methods implemented in `parsers/formats/myformat_parser.py`
 - [ ] `requirements.txt` updated if new dependencies added
-- [ ] `tests/formats/test_myformat_rules.*` created with `EXPECTED RESULTS` header
-- [ ] `tests/test_runner.py` updated with your test file in `TEST_FILES`
+- [ ] Test fixture filled with Valid_, Invalid_, (and optionally Nasty_) rules
+- [ ] `EXPECTED RESULTS` header in the fixture matches actual counts
 - [ ] `python3 main.py list` shows your format
 - [ ] `python3 main.py test` → your format → all expected counts match (`✓`)
 - [ ] No file I/O inside the parser
