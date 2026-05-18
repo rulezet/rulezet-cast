@@ -256,6 +256,10 @@ def cmd_test(_args):
     spec.loader.exec_module(module)
     module.main()
 
+
+def cmd_check(_args):
+    _interactive_check()
+
 # ── interactive menu ──────────────────────────────────────────────────────────
 
 MENU_ITEMS = [
@@ -265,6 +269,7 @@ MENU_ITEMS = [
     ("list",     "List all registered parsers"),
     ("new",      "Scaffold a new parser"),
     ("test",     "Launch the interactive test runner"),
+    ("check",    "Health check — verify dependencies & parsers"),
     ("quit",     "Exit"),
 ]
 
@@ -383,10 +388,70 @@ def _interactive_new():
     create_parser_template(fmt)
 
 
+def _interactive_check():
+    import subprocess
+    from check import run_all_checks
+
+    req_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "requirements.txt")
+
+    print()
+    print(c("  RuleCast — Health Check", BOLD, CYAN))
+    print(c("  " + "─" * 50, DIM))
+
+    all_ok, missing = run_all_checks(req_path)
+
+    print()
+    print(c("  " + "─" * 50, DIM))
+    if all_ok:
+        ok(c("All checks passed — environment is healthy.", GREEN, BOLD))
+        print()
+        return
+
+    err(c("One or more checks failed.", RED, BOLD))
+    print()
+
+    if missing:
+        warn(f"Missing packages: {c(', '.join(missing), BOLD)}")
+        print()
+        answer = input(c(
+            f"  Auto-install missing packages from requirements.txt? [Y/n]: ", DIM
+        )).strip().lower()
+
+        if answer in ("", "y", "yes"):
+            print()
+            info(f"Running: {c('pip install -r requirements.txt', BOLD)}")
+            print()
+            try:
+                subprocess.check_call(
+                    [sys.executable, "-m", "pip", "install", "-r", req_path]
+                )
+                print()
+                ok("Installation complete. Re-running checks …")
+                print()
+                all_ok2, missing2 = run_all_checks(req_path)
+                print()
+                if all_ok2:
+                    ok(c("All checks now pass — environment is healthy.", GREEN, BOLD))
+                else:
+                    err("Some checks still fail. Check the output above for details.")
+            except subprocess.CalledProcessError as e:
+                err(f"pip exited with code {e.returncode}. Fix the error above and retry.")
+        else:
+            info(f"Skipped. Run manually: {c('pip install -r requirements.txt', BOLD)}")
+
+    print()
+
+
 def run_interactive():
     print(BANNER)
     while True:
-        choice = _menu_prompt()
+        try:
+            choice = _menu_prompt()
+        except KeyboardInterrupt:
+            print()
+            info("Goodbye.")
+            print()
+            break
 
         if not choice:
             continue
@@ -405,20 +470,27 @@ def run_interactive():
             info("Goodbye.")
             print()
             break
-        elif choice == "parse":
-            _interactive_parse()
-        elif choice in ("validate", "valid"):
-            _interactive_validate()
-        elif choice == "detect":
-            _interactive_detect()
-        elif choice == "list":
-            cmd_list(None)
-        elif choice == "new":
-            _interactive_new()
-        elif choice == "test":
-            cmd_test(None)
-        else:
-            err(f"Unknown command: '{choice}'")
+
+        try:
+            if choice == "parse":
+                _interactive_parse()
+            elif choice in ("validate", "valid"):
+                _interactive_validate()
+            elif choice == "detect":
+                _interactive_detect()
+            elif choice == "list":
+                cmd_list(None)
+            elif choice == "new":
+                _interactive_new()
+            elif choice == "test":
+                cmd_test(None)
+            elif choice == "check":
+                _interactive_check()
+            else:
+                err(f"Unknown command: '{choice}'")
+        except KeyboardInterrupt:
+            print()
+            warn("Cancelled — back to menu.")
 
 # ── argparse (direct mode) ────────────────────────────────────────────────────
 
@@ -473,6 +545,9 @@ def build_parser() -> argparse.ArgumentParser:
     # test
     sub.add_parser("test", help="Launch the interactive test runner")
 
+    # check
+    sub.add_parser("check", help="Health check — verify dependencies & parsers")
+
     return p
 
 
@@ -484,6 +559,7 @@ DISPATCH = {
     "list":     cmd_list,
     "new":      cmd_new,
     "test":     cmd_test,
+    "check":    cmd_check,
 }
 
 # ── entry point ───────────────────────────────────────────────────────────────

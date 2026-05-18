@@ -39,9 +39,10 @@ def blank():    print()
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 TEST_FILES = {
-    "1": ("yara",  os.path.join(SCRIPT_DIR, "formats", "yara",     "test_yara_rules.yar")),
-    "2": ("sigma", os.path.join(SCRIPT_DIR, "formats", "sigma",    "test_sigma_rules.yml")),
-    # "3": ("suricata", os.path.join(SCRIPT_DIR, "formats", "suricata", "test_suricata_rules.rules")),
+    "1": ("yara",     os.path.join(SCRIPT_DIR, "formats", "yara",     "test_yara_rules.yar")),
+    "2": ("sigma",    os.path.join(SCRIPT_DIR, "formats", "sigma",    "test_sigma_rules.yml")),
+    "3": ("suricata", os.path.join(SCRIPT_DIR, "formats", "suricata", "test_suricata_rules.rules")),
+    "4": ("crs",      os.path.join(SCRIPT_DIR, "formats", "crs",      "test_crs_rules.conf")),
     # "4": ("zeek",     os.path.join(SCRIPT_DIR, "formats", "zeek",     "test_zeek_scripts.zeek")),
     # "5": ("wazuh",    os.path.join(SCRIPT_DIR, "formats", "wazuh",    "test_wazuh_rules.xml")),
     # "6": ("nse",      os.path.join(SCRIPT_DIR, "formats", "nse",      "test_nse_scripts.nse")),
