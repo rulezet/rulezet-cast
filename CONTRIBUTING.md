@@ -268,7 +268,7 @@ This does four things automatically:
 
 > You only need to fill in the code and the test rules. Everything else is wired up.
 
-![Step 2 — scaffold output showing the four files created](doc/screenshots/02-scaffold.png)
+<!-- ![Step 2 — scaffold output showing the four files created](doc/screenshots/02-scaffold.png) -->
 
 ---
 
@@ -434,7 +434,7 @@ python3 main.py list
 
 Your format should appear in the list with its extensions and class name.
 
-![Step 9 — list command showing the new format in the registered parsers](doc/screenshots/09-list.png)
+<!-- ![Step 9 — list command showing the new format in the registered parsers](doc/screenshots/09-list.png) -->
 
 ---
 
@@ -450,7 +450,7 @@ python3 main.py detect -i path/to/sample.ext
 
 The output should say `Detected format: myformat`.
 
-![Step 10 — detect command output confirming format is auto-detected](doc/screenshots/10-detect.png)
+<!-- ![Step 10 — detect command output confirming format is auto-detected](doc/screenshots/10-detect.png) -->
 
 ---
 
@@ -464,7 +464,7 @@ python3 main.py parse -i path/to/sample.ext --normalize
 
 Verify the output fields look correct. Check that `identity.name`, `tags`, `vulnerabilities`, and `references` contain what you expect.
 
-![Step 11 — parse command showing structured JSON output](doc/screenshots/11-parse.png)
+<!-- ![Step 11 — parse command showing structured JSON output](doc/screenshots/11-parse.png) -->
 
 ---
 
@@ -538,19 +538,19 @@ python3 main.py test
 
 A spinner appears while parsers load, then the format selection menu is shown.
 
-![Step 8.1 — test runner launch with loading spinner](doc/screenshots/81-launch.png)
+<!-- ![Step 8.1 — test runner launch with loading spinner](doc/screenshots/81-launch.png) -->
 
 ### 8.2 — Choose a format
 
 Type the number or name of your format and press Enter.
 
-![Step 8.2 — format selection menu showing all registered parsers plus the clash option](doc/screenshots/82-format-menu.png)
+<!-- ![Step 8.2 — format selection menu showing all registered parsers plus the clash option](doc/screenshots/82-format-menu.png) -->
 
 ### 8.3 — Choose the source
 
 Press `f` for file, then enter the number shown next to your fixture or type the path directly.
 
-![Step 8.3 — file source selection showing known test files for the chosen format](doc/screenshots/83-file-source.png)
+<!-- ![Step 8.3 — file source selection showing known test files for the chosen format](doc/screenshots/83-file-source.png) -->
 
 ### 8.4 — Per-rule results
 
@@ -562,7 +562,7 @@ Each rule is shown with its name, the detected outcome, and the test verdict:
 
 Errors and warnings from `validate()` are printed below failing rules.
 
-![Step 8.4 — per-rule results display with green checkmarks and rule names](doc/screenshots/84-results.png)
+<!-- ![Step 8.4 — per-rule results display with green checkmarks and rule names](doc/screenshots/84-results.png) -->
 
 ### 8.5 — Summary
 
@@ -583,7 +583,7 @@ After all rules are processed, the summary shows:
 
 All counts must show `✓` before you open a PR.
 
-![Step 8.5 — test summary showing all counts matching expected values](doc/screenshots/85-summary.png)
+<!-- ![Step 8.5 — test summary showing all counts matching expected values](doc/screenshots/85-summary.png) -->
 
 ### 8.6 — Post-test menu
 
@@ -595,7 +595,7 @@ After the summary you can:
 - `r` — run again with different input
 - `q` — quit
 
-![Step 8.6 — post-test menu options](doc/screenshots/86-postmenu.png)
+<!-- ![Step 8.6 — post-test menu options](doc/screenshots/86-postmenu.png) -->
 
 ---
 
@@ -607,11 +607,11 @@ If your format shares an extension with an existing parser (currently both ATR a
 
 From the format selection menu, press `c` (or type `clash`):
 
-![Step 9.1 — format menu with the clash option highlighted](doc/screenshots/91-clash-menu.png)
+<!-- ![Step 9.1 — format menu with the clash option highlighted](doc/screenshots/91-clash-menu.png) -->
 
 The test reads `tests/formats/conflict/test_clash.yaml` — a single file with rules from multiple formats mixed together. For each rule it calls `engine.detect_format()` and checks the result against the declared format.
 
-![Step 9.2 — clash test output showing 6/6 correctly identified](doc/screenshots/92-clash-results.png)
+<!-- ![Step 9.2 — clash test output showing 6/6 correctly identified](doc/screenshots/92-clash-results.png) -->
 
 ### 9.2 — Add your format to the clash fixture
 
