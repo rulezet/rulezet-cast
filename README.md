@@ -107,3 +107,9 @@ python3 main.py new <format_name>
 ```
 
 This generates a ready-to-fill template at `parsers/formats/<format_name>_parser.py`, registers the parser, creates a test fixture, and adds the fixture to the test runner. Implement the five methods, add your test rules, and open a PR.
+
+## Funding
+
+Rulezet is co-funded by [CIRCL](https://www.circl.lu/) and by the European Union under [NGSOTI](https://www.restena.lu/fr/project/ngsoti) (Next Generation Security Operator Training Infrastructure ) project.
+
+![EU logo](https://www.vulnerability-lookup.org/images/eu-funded.jpg)
