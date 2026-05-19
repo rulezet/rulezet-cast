@@ -59,9 +59,33 @@ BANNER = f"""
 
 # ── engine (lazy import so errors surface cleanly) ────────────────────────────
 
+def _spinner(label: str):
+    """Start a background dot-spinner. Returns a stop() callable."""
+    import threading
+    frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+    done = threading.Event()
+    def _run():
+        i = 0
+        while not done.wait(0.07):
+            sys.stdout.write(f"\r  {frames[i % len(frames)]}  {label}")
+            sys.stdout.flush()
+            i += 1
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+    def stop():
+        done.set(); t.join(timeout=0.3)
+        sys.stdout.write("\r" + " " * (len(label) + 8) + "\r")
+        sys.stdout.flush()
+    return stop
+
 def get_engine():
-    from parsers.engine import RuleCastEngine
-    return RuleCastEngine()
+    stop = _spinner("Loading parsers...")
+    try:
+        from parsers.engine import RuleCastEngine
+        engine = RuleCastEngine()
+    finally:
+        stop()
+    return engine
 
 # ── output helpers ────────────────────────────────────────────────────────────
 

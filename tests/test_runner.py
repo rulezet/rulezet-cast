@@ -52,7 +52,14 @@ TEST_FILES = {
     "10": ("zeek", os.path.join(SCRIPT_DIR, "formats", "zeek", "test_zeek_rules.zeek")),
     "11": ("wazuh",   os.path.join(SCRIPT_DIR, "formats", "wazuh",   "test_wazuh_rules.xml")),
     "12": ("elastic", os.path.join(SCRIPT_DIR, "formats", "elastic", "test_elastic_rules.toml")),
+    "13": ("atr",     os.path.join(SCRIPT_DIR, "formats", "atr",     "test_atr_rules.yaml")),
 }
+
+# Clash detection test — single file with multiple formats mixed together
+CLASH_FILE = os.path.join(SCRIPT_DIR, "formats", "conflict", "test_clash.yaml")
+
+# Matches the '# format: <name>' directive at the top of each clash chunk
+_FORMAT_DIRECTIVE_RE = re.compile(r'^\s*#\s*format\s*:\s*(\w+)\s*$', re.IGNORECASE)
 
 # ── expected counts from file header ─────────────────────────────────────────
 
@@ -94,11 +101,35 @@ def _rule_expected_validity(name: str) -> str:
 
 # ── engine ────────────────────────────────────────────────────────────────────
 
+def _spinner(label: str):
+    """Start a background dot-spinner. Returns a stop() callable."""
+    import threading
+    frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+    done = threading.Event()
+    def _run():
+        i = 0
+        while not done.wait(0.07):
+            sys.stdout.write(f"\r  {frames[i % len(frames)]}  {label}")
+            sys.stdout.flush()
+            i += 1
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+    def stop():
+        done.set(); t.join(timeout=0.3)
+        sys.stdout.write("\r" + " " * (len(label) + 8) + "\r")
+        sys.stdout.flush()
+    return stop
+
 def get_engine():
     root = os.path.dirname(SCRIPT_DIR)
     sys.path.insert(0, root)
-    from parsers.engine import RuleCastEngine
-    return RuleCastEngine()
+    stop = _spinner("Loading parsers...")
+    try:
+        from parsers.engine import RuleCastEngine
+        engine = RuleCastEngine()
+    finally:
+        stop()
+    return engine
 
 def get_available_formats(engine):
     return [p["format"] for p in engine.list_parsers()]
@@ -301,6 +332,99 @@ def print_summary(results, expected: dict):
         err(c(f"Issues: {', '.join(lines)}", RED))
     blank()
 
+# ── clash detection test ─────────────────────────────────────────────────────
+
+def _parse_clash_chunks(content: str):
+    """
+    Yield (expected_format, cleaned_rule_text, rule_title) for each chunk
+    in the clash test file. Skips chunks with no '# format:' directive.
+    """
+    import yaml as _yaml
+    parts = re.split(r'^---\s*$', content, flags=re.MULTILINE)
+    for part in parts:
+        stripped = part.strip()
+        if not stripped:
+            continue
+        expected = None
+        kept = []
+        for line in stripped.splitlines():
+            m = _FORMAT_DIRECTIVE_RE.match(line)
+            if m and expected is None:
+                expected = m.group(1).lower()
+            else:
+                kept.append(line)
+        cleaned = '\n'.join(kept).strip()
+        # Skip pure-comment blocks (fixture file header)
+        non_comment = '\n'.join(
+            l for l in cleaned.splitlines() if not l.lstrip().startswith('#')
+        ).strip()
+        if not non_comment or expected is None:
+            continue
+        # Extract a human-readable title for display
+        try:
+            doc = _yaml.safe_load(cleaned)
+            rule_title = (doc or {}).get('title', '') if isinstance(doc, dict) else ''
+        except Exception:
+            rule_title = ''
+        yield expected, cleaned, rule_title
+
+
+def run_clash_test(engine):
+    blank()
+    title("Format Clash Detection Test")
+    sep()
+    if not os.path.exists(CLASH_FILE):
+        err(f"Clash file not found: {CLASH_FILE}")
+        return
+    short = os.path.relpath(CLASH_FILE, SCRIPT_DIR)
+    info(f"File  : {c(short, DIM)}")
+
+    with open(CLASH_FILE, 'r', encoding='utf-8') as f:
+        content = f.read()
+
+    chunks = list(_parse_clash_chunks(content))
+    if not chunks:
+        err("No clash rules found in file.")
+        return
+
+    info(f"Rules : {c(len(chunks), BOLD)}")
+    sep()
+
+    passed = failed = 0
+    for i, (expected, cleaned, rule_title) in enumerate(chunks, 1):
+        detected_parser = engine.detect_format(cleaned)
+        detected = detected_parser.format if detected_parser else "unknown"
+        correct  = (detected == expected)
+        if correct:
+            passed += 1
+            icon    = c("  ✓", GREEN, BOLD)
+            verdict = c("CORRECT", GREEN)
+        else:
+            failed += 1
+            icon    = c("  ✗", RED, BOLD)
+            verdict = c("WRONG",   RED, BOLD)
+
+        exp_str  = c(expected.ljust(7), CYAN  if correct else YELLOW, BOLD)
+        det_str  = c(detected.ljust(7), GREEN if correct else RED,    BOLD)
+        name_str = c(f'"{rule_title[:55]}"', DIM) if rule_title else c(f"chunk {i}", DIM)
+
+        print(
+            f"{icon}  [{i}/{len(chunks)}]  "
+            f"expected: {exp_str}  →  detected: {det_str}  "
+            f"{verdict}  {name_str}"
+        )
+
+    blank(); sep(); blank()
+    print(c("  Clash Summary", BOLD))
+    print(c("  " + "─" * 40, DIM))
+    if failed == 0:
+        ok(c(f"All {passed}/{len(chunks)} rules correctly identified — no format leakage.", GREEN, BOLD))
+    else:
+        _check_line("Correct detections", passed, len(chunks))
+        err(c(f"{failed} rule(s) misidentified — can_handle() signals need tuning.", RED))
+    blank()
+
+
 # ── step 1: choose format ─────────────────────────────────────────────────────
 
 def step_choose_format(engine):
@@ -310,14 +434,18 @@ def step_choose_format(engine):
     sep()
     for i, fmt in enumerate(formats, 1):
         print(f"  {c(str(i), CYAN, BOLD)}  {c(fmt.upper(), BOLD)}")
+    print(c("  " + "─" * 40, DIM))
+    print(f"  {c('c', CYAN, BOLD)}  {c('CLASH', BOLD)}  {c('— format auto-detect accuracy across parsers', DIM)}")
     blank()
     while True:
         choice = input(c("  › ", CYAN, BOLD)).strip().lower()
+        if choice in ("c", "clash", "conflict"):
+            return "__clash__"
         if choice.isdigit() and 1 <= int(choice) <= len(formats):
             return formats[int(choice) - 1]
         if choice in formats:
             return choice
-        err(f"Invalid choice. Enter a number (1-{len(formats)}) or format name.")
+        err(f"Invalid choice. Enter 1-{len(formats)}, a format name, or 'c' for clash test.")
 
 # ── step 2: choose source ─────────────────────────────────────────────────────
 
@@ -502,7 +630,17 @@ def main():
         sys.exit(1)
 
     while True:
-        fmt            = step_choose_format(engine)
+        fmt = step_choose_format(engine)
+
+        if fmt == "__clash__":
+            run_clash_test(engine)
+            blank()
+            again = input(c("  Run clash test again? [y/N]: ", DIM)).strip().lower()
+            if again not in ("y", "yes"):
+                blank(); info("Goodbye."); blank()
+                break
+            continue
+
         content, fpath = step_choose_source(fmt)
         expected       = _parse_expected(fpath)
         results, _     = run_pipeline(engine, content, fmt)

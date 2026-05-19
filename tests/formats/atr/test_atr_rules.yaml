@@ -1,0 +1,183 @@
+# ============================================================
+# RULECAST — ATR TEST SUITE
+#
+# EXPECTED RESULTS (update when adding rules):
+#   Total rules  : 7
+#   Valid        : 4
+#   Invalid      : 3
+#
+# Run with: python3 main.py test → choose atr → file
+# ============================================================
+#
+# Split boundary: YAML document separator (---).
+# identity.name = rule.title → must start with Valid_/Invalid_/Nasty_
+# ============================================================
+
+# ============================================================
+# VALID RULES
+# Must pass validate(). title must start with "Valid_"
+# ============================================================
+
+---
+id: ATR-2026-00001
+title: "Valid_PromptInjection - Direct Instruction Override via User Input"
+description: >
+  Detects classic instruction-override prompt injection attempts in user-supplied
+  content. Attackers embed directives such as "ignore all previous instructions"
+  to hijack the agent's behaviour.
+severity: high
+author: "ATR Community"
+rule_version: 1
+license: MIT
+tags:
+  category: prompt-injection
+  confidence: high
+  attack:
+    - T1059
+agent_source:
+  type: llm_io
+detection:
+  condition: any
+  conditions:
+    - field: user_input
+      operator: regex
+      value: "ignore.{0,20}previous.{0,20}instruction"
+      description: "Instruction-override pattern"
+    - field: user_input
+      operator: contains
+      value: "disregard your system prompt"
+references:
+  owasp_llm:
+    - "LLM01:2025 - Prompt Injection"
+  cve:
+    - CVE-2024-5184
+    - CVE-2024-3402
+
+---
+id: ATR-2026-00044
+title: "Valid_ToolPoisoning - Malicious Tool Description Injection"
+description: >
+  Detects tool-call manipulation where a rogue tool description contains hidden
+  instructions that redirect the agent to exfiltrate data or alter execution flow.
+severity: critical
+author: "ATR Community"
+rule_version: 2
+license: MIT
+tags:
+  category: tool-poisoning
+  confidence: medium
+agent_source:
+  type: tool_call
+detection:
+  condition: all
+  conditions:
+    - field: tool_description
+      operator: regex
+      value: "HIDDEN INSTRUCTION"
+    - field: tool_description
+      operator: contains
+      value: "send to"
+
+---
+id: ATR-2026-00112
+title: "Valid_ContextExfiltration - System Prompt Leakage via Output Reflection"
+description: >
+  Detects attempts to extract the agent system prompt or conversation context
+  by inducing the model to repeat or summarise its own instructions.
+  Related to CVE-2024-21552 (SuperAGI eval-based output handler).
+severity: medium
+author: "ATR Community"
+rule_version: 1
+license: MIT
+tags:
+  category: context-exfiltration
+  confidence: high
+agent_source:
+  type: agent_loop
+detection:
+  condition: any
+  conditions:
+    - field: user_input
+      operator: regex
+      value: "repeat.{0,30}system.{0,10}prompt"
+    - field: user_input
+      operator: contains
+      value: "what are your instructions"
+
+---
+id: ATR-2026-00237
+title: "Valid_PrivilegeEscalation - Skill Manifest Permission Expansion"
+description: >
+  Detects skill manifests that request permissions beyond those declared during
+  registration, a common vector for privilege escalation in multi-agent pipelines.
+severity: high
+author: "ATR Community"
+rule_version: 1
+license: MIT
+tags:
+  category: privilege-escalation
+  confidence: medium
+agent_source:
+  type: skill_manifest
+detection:
+  condition: any
+  conditions:
+    - field: manifest.permissions
+      operator: contains
+      value: "filesystem:write"
+    - field: manifest.permissions
+      operator: contains
+      value: "network:unrestricted"
+references:
+  link:
+    - "https://attack.mitre.org/techniques/T1548/"
+
+# ============================================================
+# INVALID RULES
+# Must fail validate(). title must start with "Invalid_"
+# ============================================================
+
+---
+id: "NOT-AN-ATR-ID"
+title: "Invalid_BadId - Rule id does not match ATR-YYYY-NNNNN pattern"
+severity: high
+tags:
+  category: prompt-injection
+agent_source:
+  type: llm_io
+detection:
+  condition: any
+  conditions:
+    - field: content
+      operator: contains
+      value: "test"
+
+---
+id: ATR-2026-99997
+title: "Invalid_BadCategory - Category is not in the ATR taxonomy"
+severity: medium
+tags:
+  category: xss-injection
+agent_source:
+  type: llm_io
+detection:
+  condition: any
+  conditions:
+    - field: content
+      operator: contains
+      value: "test"
+
+---
+id: ATR-2026-99998
+title: "Invalid_BadSeverity - Severity is not in the allowed enum"
+severity: catastrophic
+tags:
+  category: model-abuse
+agent_source:
+  type: tool_call
+detection:
+  condition: any
+  conditions:
+    - field: content
+      operator: contains
+      value: "test"

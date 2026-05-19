@@ -7,10 +7,12 @@ from parsers.formats.nova_parser import NovaParser
 from parsers.formats.zeek_parser import ZeekParser
 from parsers.formats.wazuh_parser import WazuhParser
 from parsers.formats.elastic_parser import ElasticParser
+from parsers.formats.atr_parser import ATRParser
 
 
 ALL_PARSERS = [
     YaraParser(),
+    ATRParser(),    # before SigmaParser — both handle .yaml; ATR signals are more specific
     SigmaParser(),
     SuricataParser(),
     CrsParser(),

@@ -1,0 +1,119 @@
+# ============================================================
+# FORMAT CLASH DETECTION TEST — Sigma vs ATR
+#
+# Both formats use .yaml / .yml. This file verifies that
+# the auto-detector (can_handle) correctly discriminates
+# between them on content alone.
+#
+# Layout: the FIRST line of each chunk (right after ---) is:
+#     # format: <name>
+# The test runner strips that directive before calling detect_format().
+# ============================================================
+
+---
+# format: atr
+id: ATR-2026-00001
+title: "Prompt Injection — Direct Instruction Override"
+description: "Detected via ATR-YYYY-NNNNN id field."
+severity: high
+author: "ATR Community"
+tags:
+  category: prompt-injection
+  confidence: high
+agent_source:
+  type: llm_io
+detection:
+  condition: any
+  conditions:
+    - field: user_input
+      operator: regex
+      value: "ignore.{0,20}previous.{0,20}instruction"
+
+---
+# format: atr
+id: ATR-2026-00044
+title: "Tool Poisoning — Hidden Instructions in Tool Description"
+description: "Detected via agent_source.type=tool_call signal."
+severity: critical
+author: "ATR Community"
+tags:
+  category: tool-poisoning
+agent_source:
+  type: tool_call
+detection:
+  condition: any
+  conditions:
+    - field: tool_description
+      operator: contains
+      value: "HIDDEN INSTRUCTION"
+
+---
+# format: atr
+# This rule has no ATR-YYYY-NNNNN id — detected via tags.category signal only.
+title: "Context Exfiltration — System Prompt Leakage"
+description: "Relies solely on the ATR taxonomy category to trigger can_handle."
+severity: medium
+tags:
+  category: context-exfiltration
+agent_source:
+  type: agent_loop
+detection:
+  condition: any
+  conditions:
+    - field: user_input
+      operator: contains
+      value: "what are your instructions"
+
+---
+# format: sigma
+title: "Suspicious PowerShell Encoded Command Execution"
+id: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+status: stable
+description: "Detects PowerShell executing a base64-encoded command."
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: '\powershell.exe'
+    CommandLine|contains: '-EncodedCommand'
+  condition: selection
+tags:
+  - attack.execution
+  - attack.t1059.001
+
+---
+# format: sigma
+title: "DNS Request to Suspicious Top-Level Domain"
+id: b2c3d4e5-f6a7-8901-bcde-f01234567891
+status: experimental
+description: "Detects DNS lookups for uncommon TLDs used in malware campaigns."
+logsource:
+  category: dns
+  product: zeek
+detection:
+  selection:
+    query|endswith:
+      - '.xyz'
+      - '.top'
+      - '.tk'
+  condition: selection
+
+---
+# format: sigma
+title: "Executable Written to Temporary Directory"
+id: c3d4e5f6-a7b8-9012-cdef-012345678902
+status: stable
+description: "Detects creation of executable files in world-writable temp directories."
+logsource:
+  category: file_creation
+  product: windows
+detection:
+  selection:
+    TargetFilename|startswith:
+      - 'C:\Windows\Temp\'
+      - 'C:\Users\Public\'
+    TargetFilename|endswith:
+      - '.exe'
+      - '.dll'
+  condition: selection
