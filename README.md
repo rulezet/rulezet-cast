@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/ecrou-exact/RuleCast/main/doc/logo.png" width="300" alt="RuleCast logo">
+  <img src="https://raw.githubusercontent.com/ecrou-exact/RuleCast/main/doc/logo_rulecast.png" width="300" alt="RuleCast logo">
 </p>
 
 <p align="center">
