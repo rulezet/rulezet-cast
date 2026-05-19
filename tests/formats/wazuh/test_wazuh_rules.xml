@@ -1,0 +1,100 @@
+# ============================================================
+# RULECAST — WAZUH TEST SUITE
+#
+# EXPECTED RESULTS (update when adding rules):
+#   Total rules  : 8
+#   Valid        : 5
+#   Invalid      : 3
+#
+# Run with: python3 main.py test → choose wazuh → file
+# ============================================================
+#
+# Split boundary: each <rule> element inside the <group> wrapper.
+# identity.name = <description> text → must start with Valid_/Invalid_/Nasty_
+# ============================================================
+
+<group name="wazuh-test-suite">
+
+  <!-- ============================================================
+       VALID RULES
+       Must pass validate(). <description> must start with "Valid_"
+       ============================================================ -->
+
+  <!-- SSH brute-force detection: level, id, description, match condition -->
+  <rule id="100001" level="10">
+    <match>sshd.*Failed password</match>
+    <description>Valid_SSHBruteforce - Detects repeated SSH login failures</description>
+    <group>authentication_failure,ssh,</group>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+    <info type="link">https://attack.mitre.org/techniques/T1110/</info>
+  </rule>
+
+  <!-- Web attack detection: regex condition, CVE reference -->
+  <rule id="100002" level="12">
+    <regex>GET .*\.\./</regex>
+    <description>Valid_WebPathTraversal - Directory traversal attack detected (CVE-2021-41773)</description>
+    <group>web,attack,</group>
+    <cve>CVE-2021-41773</cve>
+    <info type="link">https://nvd.nist.gov/vuln/detail/CVE-2021-41773</info>
+  </rule>
+
+  <!-- Privilege escalation via sudo: if_sid chaining -->
+  <rule id="100003" level="8">
+    <if_sid>5401</if_sid>
+    <match>sudo.*command not allowed</match>
+    <description>Valid_SudoPrivEsc - Unauthorized sudo command attempt detected</description>
+    <group>authentication_failed,sudo,</group>
+    <mitre>
+      <id>T1548.003</id>
+    </mitre>
+  </rule>
+
+  <!-- Frequency/timeframe correlation rule -->
+  <rule id="100004" level="14">
+    <if_matched_sid>100001</if_matched_sid>
+    <description>Valid_SSHBruteforceThreshold - SSH brute-force threshold exceeded</description>
+    <frequency>10</frequency>
+    <timeframe>120</timeframe>
+    <group>authentication_failure,ssh,brute_force,</group>
+    <mitre>
+      <id>T1110.001</id>
+    </mitre>
+  </rule>
+
+  <!-- Field-based detection with program_name scope -->
+  <rule id="100005" level="6">
+    <program_name>sshd</program_name>
+    <field name="srcip">10\.0\.0\.</field>
+    <description>Valid_InternalNetworkSSH - SSH connection from internal network range</description>
+    <group>ssh,network,</group>
+  </rule>
+
+  <!-- ============================================================
+       INVALID RULES
+       Must fail validate(). <description> must start with "Invalid_"
+       ============================================================ -->
+
+  <!-- Missing id attribute -->
+  <rule level="9">
+    <match>Failed login</match>
+    <description>Invalid_MissingId - This rule has no id attribute</description>
+    <group>authentication_failure,</group>
+  </rule>
+
+  <!-- Level out of valid range (0-15) -->
+  <rule id="100007" level="99">
+    <match>segfault</match>
+    <description>Invalid_LevelOutOfRange - Level 99 is not within 0-15</description>
+    <group>system,</group>
+  </rule>
+
+  <!-- Non-integer id attribute -->
+  <rule id="not-a-number" level="5">
+    <match>error</match>
+    <description>Invalid_BadIdValue - Rule id is not a valid integer</description>
+    <group>system,</group>
+  </rule>
+
+</group>
