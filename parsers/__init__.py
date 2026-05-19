@@ -6,6 +6,7 @@ from parsers.formats.nse_parser import NseParser
 from parsers.formats.nova_parser import NovaParser
 from parsers.formats.zeek_parser import ZeekParser
 from parsers.formats.wazuh_parser import WazuhParser
+from parsers.formats.elastic_parser import ElasticParser
 
 
 ALL_PARSERS = [
@@ -17,5 +18,6 @@ ALL_PARSERS = [
     NovaParser(),
     ZeekParser(),
     WazuhParser(),
+    ElasticParser(),
     # add new parsers here as you implement them
 ]

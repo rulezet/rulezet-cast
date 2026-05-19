@@ -1,0 +1,290 @@
+# ============================================================
+# RULECAST — ELASTIC TEST SUITE
+#
+# EXPECTED RESULTS (update when adding rules):
+#   Total rules  : 7
+#   Valid        : 4
+#   Invalid      : 3
+#
+# Run with: python3 main.py test → choose elastic → file
+# ============================================================
+#
+# Split boundary: each rule starts with [metadata] section.
+# identity.name = rule.name → must start with Valid_/Invalid_/Nasty_
+# ============================================================
+
+# ============================================================
+# VALID RULES
+# Must pass validate(). rule.name must start with "Valid_"
+# ============================================================
+
+[metadata]
+creation_date = "2026/01/30"
+integration = ["endpoint"]
+maturity = "production"
+updated_date = "2026/02/09"
+
+[rule]
+author = ["Elastic"]
+description = """
+Detects executable file downloads via wget to suspicious locations such as /tmp or /Users/Shared.
+Threat actors commonly use wget to download malicious payloads and additional tools for post-exploitation.
+"""
+language = "eql"
+license = "Elastic License v2"
+name = "Valid_WgetDownload - Executable File Download via Wget"
+references = ["https://attack.mitre.org/techniques/T1105/"]
+risk_score = 47
+rule_id = "36755b43-a1f9-4f2c-9b61-6b240dd0e164"
+severity = "medium"
+tags = [
+    "Domain: Endpoint",
+    "OS: macOS",
+    "Use Case: Threat Detection",
+    "Tactic: Command and Control",
+    "Data Source: Elastic Defend",
+]
+type = "eql"
+index = ["logs-endpoint.events.network-*", "logs-endpoint.events.file-*"]
+query = '''
+sequence by process.entity_id with maxspan=30s
+  [network where host.os.type == "macos" and event.type == "start" and process.name == "wget"]
+  [file where host.os.type == "macos" and event.action == "modification" and
+    process.name == "wget" and
+    file.path like ("/tmp/*", "/private/tmp/*", "/Users/Shared/*")]
+'''
+
+[[rule.threat]]
+framework = "MITRE ATT&CK"
+
+  [rule.threat.tactic]
+  name = "Command and Control"
+  id = "TA0011"
+  reference = "https://attack.mitre.org/tactics/TA0011/"
+
+  [[rule.threat.technique]]
+  name = "Ingress Tool Transfer"
+  id = "T1105"
+  reference = "https://attack.mitre.org/techniques/T1105/"
+
+[metadata]
+creation_date = "2025/11/15"
+integration = ["windows"]
+maturity = "production"
+updated_date = "2026/01/10"
+
+[rule]
+author = ["Elastic"]
+description = """
+Identifies the execution of PowerShell with a base64-encoded command argument.
+Attackers often encode PowerShell commands to obfuscate malicious payloads and
+bypass security controls.
+"""
+language = "kql"
+license = "Elastic License v2"
+name = "Valid_PowershellBase64 - Encoded PowerShell Command Execution"
+references = [
+    "https://attack.mitre.org/techniques/T1059/001/",
+    "https://docs.microsoft.com/en-us/powershell/",
+]
+risk_score = 73
+rule_id = "a8b2e9c4-3f1d-4e7a-b5c6-2d8f0e1a9b3c"
+severity = "high"
+tags = [
+    "Domain: Endpoint",
+    "OS: Windows",
+    "Use Case: Threat Detection",
+    "Tactic: Execution",
+    "Data Source: Elastic Defend",
+]
+type = "eql"
+index = ["logs-endpoint.events.process-*", "winlogbeat-*"]
+query = '''
+process where host.os.type == "windows" and event.type == "start" and
+  process.name : ("powershell.exe", "pwsh.exe") and
+  process.args : ("-EncodedCommand", "-enc", "-en") and
+  process.args_count >= 2
+'''
+
+[[rule.threat]]
+framework = "MITRE ATT&CK"
+
+  [rule.threat.tactic]
+  name = "Execution"
+  id = "TA0002"
+  reference = "https://attack.mitre.org/tactics/TA0002/"
+
+  [[rule.threat.technique]]
+  name = "Command and Scripting Interpreter"
+  id = "T1059"
+  reference = "https://attack.mitre.org/techniques/T1059/"
+
+    [[rule.threat.technique.subtechnique]]
+    name = "PowerShell"
+    id = "T1059.001"
+    reference = "https://attack.mitre.org/techniques/T1059/001/"
+
+[metadata]
+creation_date = "2025/09/01"
+integration = ["endpoint", "network"]
+maturity = "production"
+updated_date = "2026/03/01"
+
+[rule]
+author = ["Elastic"]
+description = """
+Detects network connections to known Tor exit nodes. Tor usage may indicate attempts
+to anonymize traffic for data exfiltration or command-and-control communication.
+"""
+language = "eql"
+license = "Elastic License v2"
+name = "Valid_TorNetworkConnection - Connection to Tor Exit Node"
+references = ["https://attack.mitre.org/techniques/T1090/003/"]
+risk_score = 55
+rule_id = "c7d3a2f1-8e4b-4c9d-a0e5-1f2b3c4d5e6f"
+severity = "medium"
+tags = [
+    "Domain: Endpoint",
+    "Use Case: Threat Detection",
+    "Tactic: Command and Control",
+    "Data Source: Elastic Defend",
+]
+type = "eql"
+index = ["logs-endpoint.events.network-*"]
+query = '''
+network where event.type == "start" and
+  destination.port in (9001, 9030) and
+  network.direction == "outgoing"
+'''
+
+[[rule.threat]]
+framework = "MITRE ATT&CK"
+
+  [rule.threat.tactic]
+  name = "Command and Control"
+  id = "TA0011"
+  reference = "https://attack.mitre.org/tactics/TA0011/"
+
+  [[rule.threat.technique]]
+  name = "Proxy"
+  id = "T1090"
+  reference = "https://attack.mitre.org/techniques/T1090/"
+
+    [[rule.threat.technique.subtechnique]]
+    name = "Multi-hop Proxy"
+    id = "T1090.003"
+    reference = "https://attack.mitre.org/techniques/T1090/003/"
+
+[metadata]
+creation_date = "2025/06/20"
+integration = ["system"]
+maturity = "production"
+updated_date = "2026/01/05"
+
+[rule]
+author = ["Elastic"]
+description = """
+Detects the creation of new local user accounts. Adversaries may create accounts
+to maintain persistent access or escalate privileges on a compromised system.
+"""
+language = "eql"
+license = "Elastic License v2"
+name = "Valid_LocalUserAccountCreation - New Local User Account Created"
+references = ["https://attack.mitre.org/techniques/T1136/001/"]
+risk_score = 21
+rule_id = "f4e5d6c7-b8a9-4d2e-8f1c-3a4b5c6d7e8f"
+severity = "low"
+tags = [
+    "Domain: Endpoint",
+    "OS: Windows",
+    "OS: Linux",
+    "Use Case: Threat Detection",
+    "Tactic: Persistence",
+    "Data Source: Elastic Defend",
+]
+type = "eql"
+index = ["logs-endpoint.events.iam-*", "winlogbeat-*"]
+query = '''
+iam where event.action in ("user-created", "added-user-account") and
+  not user.name : ("SYSTEM", "LOCAL SERVICE", "NETWORK SERVICE")
+'''
+
+[[rule.threat]]
+framework = "MITRE ATT&CK"
+
+  [rule.threat.tactic]
+  name = "Persistence"
+  id = "TA0003"
+  reference = "https://attack.mitre.org/tactics/TA0003/"
+
+  [[rule.threat.technique]]
+  name = "Create Account"
+  id = "T1136"
+  reference = "https://attack.mitre.org/techniques/T1136/"
+
+    [[rule.threat.technique.subtechnique]]
+    name = "Local Account"
+    id = "T1136.001"
+    reference = "https://attack.mitre.org/techniques/T1136/001/"
+
+# ============================================================
+# INVALID RULES
+# Must fail validate(). rule.name must start with "Invalid_"
+# ============================================================
+
+[metadata]
+creation_date = "2026/01/01"
+maturity = "development"
+
+[rule]
+author = ["Test"]
+description = "Rule with an invalid severity value."
+language = "eql"
+license = "Elastic License v2"
+name = "Invalid_BadSeverity - Severity value is not in the allowed set"
+risk_score = 50
+rule_id = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+severity = "extreme"
+type = "eql"
+index = ["logs-*"]
+query = '''
+process where process.name == "cmd.exe"
+'''
+
+[metadata]
+creation_date = "2026/01/01"
+maturity = "development"
+
+[rule]
+author = ["Test"]
+description = "Rule with a malformed rule_id (not a valid UUID)."
+language = "kql"
+license = "Elastic License v2"
+name = "Invalid_BadRuleId - rule_id is not a valid UUID"
+risk_score = 30
+rule_id = "not-a-valid-uuid"
+severity = "low"
+type = "query"
+index = ["logs-*"]
+query = '''
+event.category:process and process.name:notepad.exe
+'''
+
+[metadata]
+creation_date = "2026/01/01"
+maturity = "development"
+
+[rule]
+author = ["Test"]
+description = "Rule with risk_score outside the allowed 0-100 range."
+language = "eql"
+license = "Elastic License v2"
+name = "Invalid_BadRiskScore - risk_score is 150 which exceeds maximum"
+risk_score = 150
+rule_id = "b2c3d4e5-f6a7-8901-bcde-f01234567891"
+severity = "high"
+type = "eql"
+index = ["logs-*"]
+query = '''
+process where process.name == "malware.exe"
+'''

@@ -50,7 +50,8 @@ TEST_FILES = {
     "8": ("nse", os.path.join(SCRIPT_DIR, "formats", "nse", "test_nse_rules.nse")),
     "9":  ("nova", os.path.join(SCRIPT_DIR, "formats", "nova", "test_nova_rules.nov")),
     "10": ("zeek", os.path.join(SCRIPT_DIR, "formats", "zeek", "test_zeek_rules.zeek")),
-    "11": ("wazuh", os.path.join(SCRIPT_DIR, "formats", "wazuh", "test_wazuh_rules.xml")),
+    "11": ("wazuh",   os.path.join(SCRIPT_DIR, "formats", "wazuh",   "test_wazuh_rules.xml")),
+    "12": ("elastic", os.path.join(SCRIPT_DIR, "formats", "elastic", "test_elastic_rules.toml")),
 }
 
 # ── expected counts from file header ─────────────────────────────────────────
