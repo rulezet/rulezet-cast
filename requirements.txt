@@ -4,3 +4,4 @@ pysigma==1.3.3
 suricataparser
 msc-pyparser
 luaparser
+nova-hunting

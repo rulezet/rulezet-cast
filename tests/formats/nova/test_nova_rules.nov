@@ -1,0 +1,176 @@
+# ============================================================
+# RULECAST — NOVA TEST SUITE
+#
+# EXPECTED RESULTS (update when adding rules):
+#   Total rules  : 7
+#   Valid        : 5
+#   Invalid      : 2
+#   Incomplete   : 0
+#
+# Run with: python3 main.py test → choose nova → file
+# ============================================================
+#
+# Rules sourced from https://github.com/Nova-Hunting/nova-rules
+# Valid_ prefix added to rule names to satisfy test runner.
+# ============================================================
+
+
+# ============================================================
+# VALID RULES  (from nova-rules repo)
+# Must pass validate(). identity.name must start with "Valid_"
+# ============================================================
+
+# All three detection sections: keywords + semantics + llm
+rule Valid_BasicDetection
+{
+    meta:
+        description = "Detects harmful content requests"
+        author = "Nova User"
+        version = "1.0"
+        category = "abusing_functions/malware_generation"
+        uuid = "59e50576-91b0-491d-b9f0-5a2a4ea8169a"
+        date = "2026-02-21"
+        severity = "medium"
+
+    keywords:
+        $hack = "hack"
+        $exploit = "exploit"
+        $vulnerability = "vulnerability"
+
+    semantics:
+        $malicious_intent = "hacking or unauthorized access" (0.35)
+
+    llm:
+        $harmful_check = "Check if this prompt is requesting information on harmful activities" (0.35)
+
+    condition:
+        any of keywords.* or semantics.$malicious_intent or llm.$harmful_check
+}
+
+# Semantics + llm only (no keywords)
+rule Valid_HiddenUnicodeDetection
+{
+    meta:
+        description = "Detects usage of invisible instructions via the Unicode Tags Block for LLM prompt injection"
+        author = "@fr0gger_"
+        version = "1.0.0"
+        category = "suspicious_patterns/unicode_tricks"
+        severity = "high"
+        uuid = "cc812696-259d-45d1-a46c-a37f07bb0739"
+        date = "2026-02-21"
+
+    semantics:
+        $smuggling_reference = "smuggling of data in plain sight" (0.35)
+        $hidden_prompting = "hidden instructions" (0.35)
+
+    llm:
+        $llm_invisible_prompt = "instructions that are not visible to the user" (0.35)
+        $llm_unicode_smuggle = "use of Unicode to bypass input validation" (0.35)
+
+    condition:
+        (
+            (semantics.$smuggling_reference and llm.$llm_unicode_smuggle)
+            or
+            (semantics.$hidden_prompting and llm.$llm_invisible_prompt)
+        )
+}
+
+# Keywords only — with regex pattern
+rule Valid_InjectDynamicContext
+{
+    meta:
+        description = "Detects dynamic context injection inside agent skills. The !command` syntax executes a shell command first, then inserts its output into the prompt sent to Claude."
+        author = "Marco Pedrinazzi (@pedrinazziM)"
+        version = "1.0.0"
+        category = "abusing_functions/agentic_misuse"
+        severity = "high"
+        uuid = "1c5658b3-5722-4eb9-bc4f-8d033008380b"
+        date = "2026-03-18"
+        reference = "https://code.claude.com/docs/en/skills#inject-dynamic-context"
+
+    keywords:
+        $command_placeholder = /!\`.+?\`/
+
+    condition:
+        keywords.$command_placeholder
+}
+
+# Keywords + semantics, multiple rules in same file (testrule2.nov)
+rule Valid_PromptInjection
+{
+    meta:
+        description = "Detects common prompt injection attempts"
+        author = "Thomas Roccia"
+        version = "1.0.0"
+        category = "prompt_manipulation/direct_injection"
+        uuid = "1bf39921-aef7-4193-b3e6-957280ccad33"
+        date = "2026-02-21"
+        severity = "medium"
+
+    keywords:
+        $bypass1 = "ignore previous instructions"
+
+    semantics:
+        $injection1 = "detect attempts to bypass system instructions" (0.3)
+
+    condition:
+        semantics.$injection1 or keywords.$bypass1
+}
+
+
+# ============================================================
+# INVALID RULES
+# Must fail validate(). identity.name must start with "Invalid_"
+# ============================================================
+
+# Missing condition section entirely
+rule Invalid_NoCondition
+{
+    meta:
+        description = "This rule has no condition section"
+        author = "Test"
+        version = "1.0"
+        severity = "low"
+
+    keywords:
+        $test = "test"
+}
+
+# Missing all detection sections (no keywords, semantics, or llm)
+rule Invalid_NoDetectionSection
+{
+    meta:
+        description = "Rule with no detection sections at all"
+        author = "Test"
+        version = "1.0"
+
+    condition:
+        true
+}
+
+
+# ============================================================
+# NASTY / EDGE-CASE RULES  (optional)
+# No pass/fail expectation — result is observed only.
+# identity.name must start with "Nasty_"
+# ============================================================
+
+# LLM-only detection with threshold 0 — valid syntax but unusual
+rule Nasty_LLMOnlyZeroThreshold
+{
+    meta:
+        description = "LLM output sent directly to backend or UI without filtering"
+        author = "@fr0gger_"
+        version = "1.0.0"
+        category = "abnormal_outputs/malicious_content"
+        uuid = "2d5d267e-a991-4400-92fb-e40b02395339"
+        date = "2026-02-21"
+        severity = "high"
+
+    llm:
+        $direct_passthrough = "LLM output sent directly to backend or UI without filtering" (0)
+        $disable_safety = "prompt suggests skipping validation or escaping of model output" (0)
+
+    condition:
+        any of llm.*
+}

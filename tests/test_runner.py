@@ -48,6 +48,7 @@ TEST_FILES = {
     # "6": ("nse",      os.path.join(SCRIPT_DIR, "formats", "nse",      "test_nse_scripts.nse")),
     # "7": ("crs",      os.path.join(SCRIPT_DIR, "formats", "crs",      "test_crs_rules.conf")),
     "8": ("nse", os.path.join(SCRIPT_DIR, "formats", "nse", "test_nse_rules.nse")),
+    "9": ("nova", os.path.join(SCRIPT_DIR, "formats", "nova", "test_nova_rules.nov")),
 }
 
 # ── expected counts from file header ─────────────────────────────────────────
