@@ -48,6 +48,32 @@ raw text / file
 - `tests/test_runner.py` — interactive test runner; `TEST_FILES` dict maps format names to fixtures
 - `utils/scaffold.py` — generates parser templates
 
+### Implemented parsers
+
+| Format | File | Extension(s) | Validator | Notes |
+|--------|------|-------------|-----------|-------|
+| YARA | `yara_parser.py` | `.yar` `.yara` | `yara-python` + `plyara` | Reference implementation |
+| Sigma | `sigma_parser.py` | `.yaml` `.yml` | `pysigma` | |
+| Suricata | `suricata_parser.py` | `.rules` | `suricataparser` | |
+| CRS | `crs_parser.py` | `.conf` | `msc-pyparser` | ModSecurity/OWASP CRS |
+| NSE | `nse_parser.py` | `.nse` | `luac -p` → `luaparser` fallback | Nmap Scripting Engine (Lua) |
+| Nova | `nova_parser.py` | `.nov` | `nova-hunting` | AI/LLM hunting rules |
+| Zeek | `zeek_parser.py` | `.zeek` `.bro` | `zeekscript` (tree-sitter) | |
+| Wazuh | `wazuh_parser.py` | `.xml` | `xml.etree.ElementTree` | SIEM rules (XML) |
+| Elastic | `elastic_parser.py` | `.toml` | `tomllib` (stdlib) | Elastic Security detection rules |
+| ATR | `atr_parser.py` | `.yaml` `.yml` | `PyYAML` | Agent Threat Rules for AI agents |
+
+### ALL_PARSERS ordering
+
+Order matters — `detect_format()` returns the first `can_handle()` match. Current order in `parsers/__init__.py`:
+
+```
+YaraParser → ATRParser → SigmaParser → SuricataParser → CrsParser →
+NseParser → NovaParser → ZeekParser → WazuhParser → ElasticParser
+```
+
+**ATR must come before Sigma** — both handle `.yaml`/`.yml`. ATR signals (`ATR-YYYY-NNNNN` id, `agent_source:`, ATR taxonomy category names) are specific enough not to collide with Sigma, but putting ATR first ensures it wins cleanly.
+
 ### Output schemas
 
 **`parse()` must return all keys** on both normal and fallback (exception) paths:
@@ -71,7 +97,8 @@ raw text / file
 
 ```python
 {"title": str | None, "format": str, "description": str,
- "author": str, "content": str, "tags": list, "original_uuid": str | None}
+ "author": str, "content": str, "tags": list, "original_uuid": str | None,
+ "version": str, "references": list, "vulnerabilities": list}
 ```
 
 ## YARA parser internals
@@ -86,8 +113,8 @@ The reference implementation (`parsers/formats/yara_parser.py`) uses `yara-pytho
 
 1. `python3 main.py new <format>` → creates `parsers/formats/<format>_parser.py`
 2. Implement 5 methods: `can_handle`, `split_rules`, `validate`, `parse`, `normalize`
-3. Register: add instance to `ALL_PARSERS` in `parsers/__init__.py`
-4. Add test fixture `tests/formats/test_<format>_rules.*` with the `EXPECTED RESULTS` header (see `test_yara_rules.yar`)
+3. Register: add instance to `ALL_PARSERS` in `parsers/__init__.py` (mind the ordering)
+4. Add test fixture `tests/formats/<format>/test_<format>_rules.*` with the `EXPECTED RESULTS` header
 5. Register fixture in `TEST_FILES` in `tests/test_runner.py`
 
 **Non-negotiable rules:**
@@ -99,26 +126,53 @@ The reference implementation (`parsers/formats/yara_parser.py`) uses `yara-pytho
 
 ### Recommended libraries by format
 
-| Format | Library |
-|--------|---------|
-| Sigma | `pysigma` |
-| Suricata | `suricataparser`, `suricata-check`, or `idstools` |
-| Zeek | `zeekscript` |
-| Wazuh | `xml.etree.ElementTree` (stdlib) or `lxml` |
-| NSE (Lua) | `luaparser` |
-| CRS | `secrules-parsing` |
-| Nova | manual parsing (no library exists) |
+| Format | Library | Notes |
+|--------|---------|-------|
+| Sigma | `pysigma` | |
+| Suricata | `suricataparser` | |
+| Zeek | `zeekscript` | tree-sitter based |
+| Wazuh | `xml.etree.ElementTree` | stdlib |
+| NSE (Lua) | `luac -p` (subprocess) | `luaparser` as fallback when luac not found |
+| CRS | `msc-pyparser` | |
+| Nova | `nova-hunting` | |
+| Elastic | `tomllib` | stdlib (Python ≥ 3.11) |
+| ATR | `PyYAML` | already a transitive dep — no extra install needed |
 
 ## Test fixtures
 
-Fixture files live in `tests/formats/`. The `EXPECTED RESULTS` header is parsed automatically by the test runner to verify counts:
+Fixture files live in `tests/formats/`. The `EXPECTED RESULTS` header is parsed automatically by the test runner:
 
 ```
 # EXPECTED RESULTS (update when adding rules):
 #   Total rules  : 20
 #   Valid        : 15
 #   Invalid      : 5
-#   Incomplete   : 0
+```
+
+Rule naming convention — the test runner reads `identity.name` (= rule title or description) to classify each rule:
+
+| Prefix | Expectation |
+|--------|-------------|
+| `Valid_` | `validate()` must return `ok=True` |
+| `Invalid_` | `validate()` must return `ok=False` |
+| `Nasty_` | No expectation — edge case, result observed only |
+
+## Format clash test
+
+The test runner has a built-in **clash detection test** (option `c` in the format menu). It reads `tests/formats/conflict/test_clash.yaml` — a single file with rules from multiple formats separated by `---`. The first line of each chunk must be `# format: <name>`.
+
+The clash test calls `engine.detect_format()` on each rule and checks that the detected format matches the declared one. Run it whenever a new format shares an extension with an existing parser to catch `can_handle()` false positives.
+
+**Clash fixture layout** — `# format:` goes on the FIRST line of each chunk, right after `---`:
+```yaml
+---
+# format: atr
+id: ATR-2026-00001
+...
+---
+# format: sigma
+title: "..."
+logsource: ...
 ```
 
 ## Commit and branch conventions

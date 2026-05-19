@@ -24,6 +24,8 @@ import sys
 import textwrap
 from typing import Optional
 
+__version__ = "1.0.0"
+
 # ── colour helpers (no external dep) ────────────────────────────────────────
 
 RESET  = "\033[0m"
@@ -54,7 +56,7 @@ BANNER = f"""
   ██╔══██╗██║   ██║██║     ██╔══╝  ██║     ██╔══██║╚════██║   ██║
   ██║  ██║╚██████╔╝███████╗███████╗╚██████╗██║  ██║███████║   ██║
   ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚══════╝ ╚═════╝╚═╝  ╚═╝╚══════╝   ╚═╝{RESET}
-{DIM}  Security Rule Parser & Normalizer{RESET}
+{DIM}  Security Rule Parser & Normalizer   v{__version__}{RESET}
 """
 
 # ── engine (lazy import so errors surface cleanly) ────────────────────────────
@@ -549,7 +551,7 @@ def run_interactive():
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="rulecast",
-        description="RuleCast — Security Rule Parser & Normalizer",
+        description=f"RuleCast {__version__} — Security Rule Parser & Normalizer",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=textwrap.dedent("""\
             Examples:
@@ -601,6 +603,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     # check
     sub.add_parser("check", help="Health check — verify dependencies & parsers")
+
+    # version
+    p.add_argument("--version", action="version", version=f"RuleCast {__version__}")
 
     return p
 

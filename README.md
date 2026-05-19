@@ -7,22 +7,33 @@
   Built to complement <a href="https://github.com/ngsoti/rulezet-core">rulezet-core</a>.
 </p>
 
+<p align="center">
+  <img src="https://img.shields.io/badge/version-1.0.0-blue" alt="version 1.0.0">
+  <img src="https://img.shields.io/badge/python-3.11+-blue" alt="Python 3.11+">
+  <img src="https://img.shields.io/badge/formats-10-green" alt="10 formats">
+  <img src="https://img.shields.io/badge/license-MIT-lightgrey" alt="MIT license">
+</p>
+
 ---
 
 ## What it does
 
-RuleCast takes raw cybersecurity detection rules (YARA, Sigma, Suricata, and more) via text or file, validates their syntax, and outputs structured JSON ready for integration or automation.
+RuleCast takes raw cybersecurity detection rules via text or file, validates their syntax, and outputs structured JSON ready for integration or automation. It supports ten rule formats out of the box and is designed to be extended with new formats in minutes.
 
 ## Supported formats
 
-| Format | Status |
-|--------|--------|
-| YARA | ✅ Implemented |
-| Sigma | 🔜 Planned |
-| Suricata | 🔜 Planned |
-| Zeek | 🔜 Planned |
-| Wazuh | 🔜 Planned |
-| NSE / CRS / Nova | 🔜 Planned |
+| Format | Extension(s) | Validator | Status |
+|--------|-------------|-----------|--------|
+| YARA | `.yar` `.yara` | `yara-python` | ✅ Implemented |
+| Sigma | `.yaml` `.yml` | `pysigma` | ✅ Implemented |
+| Suricata | `.rules` | `suricataparser` | ✅ Implemented |
+| CRS (ModSecurity / OWASP) | `.conf` | `msc-pyparser` | ✅ Implemented |
+| NSE (Nmap Scripting Engine) | `.nse` | `luac -p` | ✅ Implemented |
+| Nova (AI/LLM hunting) | `.nov` | `nova-hunting` | ✅ Implemented |
+| Zeek | `.zeek` `.bro` | `zeekscript` | ✅ Implemented |
+| Wazuh SIEM | `.xml` | stdlib XML | ✅ Implemented |
+| Elastic Security | `.toml` | stdlib `tomllib` | ✅ Implemented |
+| ATR (Agent Threat Rules) | `.yaml` `.yml` | `PyYAML` | ✅ Implemented |
 
 ## Installation
 
@@ -43,7 +54,6 @@ python3 main.py
 
 <img width="703" height="488" alt="Screenshot from 2026-05-11 11-56-13" src="https://github.com/user-attachments/assets/1eb2ba37-74e9-478a-84e1-ac5bde20cc73" />
 
-
 **Direct commands:**
 ```bash
 # Parse a rule from text
@@ -53,7 +63,7 @@ python3 main.py parse -t 'rule MyTest { condition: true }'
 python3 main.py parse -i rules.yar
 
 # Validate only
-python3 main.py validate -i rules.yar
+python3 main.py validate -i rules.yar -f yara
 
 # Auto-detect format
 python3 main.py detect -t 'rule MyTest { condition: true }'
@@ -61,11 +71,17 @@ python3 main.py detect -t 'rule MyTest { condition: true }'
 # Output as JSON
 python3 main.py parse -i rules.yar --json
 
+# Normalize to Rulezet schema
+python3 main.py parse -i rules.yar --normalize
+
+# List all registered parsers
+python3 main.py list
+
 # Launch the interactive test runner
 python3 main.py test
 
 # Scaffold a new parser
-python3 main.py new sigma
+python3 main.py new myformat
 ```
 
 ## Test runner
@@ -76,11 +92,13 @@ RuleCast includes an interactive test runner to validate parsers against rule fi
 python3 main.py test
 ```
 
-It lets you choose a format, load a test file or paste content, then shows per-rule results and a summary that checks found counts against the expected counts declared in the test file header.
+Choose a format, load a test file or paste content, then get per-rule results and a summary that checks counts against the expected values declared in the fixture header.
+
+The test runner also includes a **format clash detection test** (press `c` at the format menu). It runs all formats that share an extension against a mixed fixture and verifies that each rule is correctly identified — catching `can_handle()` false positives automatically.
 
 ## Adding a new format
 
-See **[CONTRIBUTING.md](CONTRIBUTING.md)** for the full guide: how the pipeline works, what methods to implement, how to write test fixtures, and how to open a pull request.
+See **[CONTRIBUTING.md](CONTRIBUTING.md)** for the full step-by-step guide with screenshots.
 
 Quick start:
 
@@ -88,4 +106,4 @@ Quick start:
 python3 main.py new <format_name>
 ```
 
-This generates a ready-to-fill template at `parsers/formats/<format_name>_parser.py`. Implement the methods, add the parser to `parsers/__init__.py`, add a test fixture, and you're done.
+This generates a ready-to-fill template at `parsers/formats/<format_name>_parser.py`, registers the parser, creates a test fixture, and adds the fixture to the test runner. Implement the five methods, add your test rules, and open a PR.
