@@ -49,7 +49,7 @@ pip install -r requirements.txt
 
 **Interactive menu:**
 ```bash
-python3 main.py
+python3 main.py or ./run.sh
 ```
 
 <img width="703" height="488" alt="Screenshot from 2026-05-11 11-56-13" src="https://github.com/user-attachments/assets/1eb2ba37-74e9-478a-84e1-ac5bde20cc73" />
