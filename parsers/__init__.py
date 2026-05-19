@@ -4,6 +4,7 @@ from parsers.formats.yara_parser import YaraParser
 from parsers.formats.crs_parser import CrsParser
 from parsers.formats.nse_parser import NseParser
 from parsers.formats.nova_parser import NovaParser
+from parsers.formats.zeek_parser import ZeekParser
 
 
 ALL_PARSERS = [
@@ -13,5 +14,6 @@ ALL_PARSERS = [
     CrsParser(),
     NseParser(),
     NovaParser(),
+    ZeekParser(),
     # add new parsers here as you implement them
 ]

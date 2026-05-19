@@ -5,3 +5,4 @@ suricataparser
 msc-pyparser
 luaparser
 nova-hunting
+zeekscript
