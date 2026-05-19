@@ -239,9 +239,15 @@ def cmd_parse(args):
 
 
 def cmd_new(args):
-    fmt = args.format_name
-    from utils.scaffold import create_parser_template
-    create_parser_template(fmt)
+    from utils.scaffold import create_parser_template, parse_extensions
+    extensions = None
+    if args.ext:
+        valid, bad = parse_extensions(" ".join(args.ext))
+        if bad:
+            for b in bad:
+                err(f"{c(b, BOLD)} is not a valid extension — skipped")
+        extensions = valid or None
+    create_parser_template(args.format_name, extensions)
 
 
 def cmd_test(_args):
@@ -379,13 +385,35 @@ def _interactive_detect():
 
 
 def _interactive_new():
+    from utils.scaffold import create_parser_template, parse_extensions
+
     print()
     fmt = _ask("New format name (e.g. sigma, suricata)")
     if not fmt:
         err("No format name given.")
         return
-    from utils.scaffold import create_parser_template
-    create_parser_template(fmt)
+
+    # Ask for extensions with a validation loop
+    print()
+    info(f"Extensions for this format (e.g. .yar, .yara — comma or space separated)")
+    info(f"Press Enter to use the default: {c(f'.{fmt.lower()}', BOLD)}")
+    extensions = None
+    while True:
+        raw = input(c("  › ", CYAN, BOLD)).strip()
+        if not raw:
+            break  # keep default
+        valid, bad = parse_extensions(raw)
+        if bad:
+            for b in bad:
+                err(f"{c(b, BOLD)} is not a valid extension — must be {c('.letters', BOLD)} (e.g. .yar, .conf)")
+        if not valid and not bad:
+            break
+        if valid:
+            extensions = valid
+            break
+        # had only bad entries — re-ask
+
+    create_parser_template(fmt, extensions)
 
 
 def _interactive_check():
@@ -541,6 +569,8 @@ def build_parser() -> argparse.ArgumentParser:
     # new
     sn = sub.add_parser("new", help="Scaffold a new parser")
     sn.add_argument("format_name", help="Format name (e.g. sigma)")
+    sn.add_argument("--ext", nargs="+", metavar="EXT",
+                    help="File extensions (e.g. --ext .yar .yara)")
 
     # test
     sub.add_parser("test", help="Launch the interactive test runner")

@@ -1,9 +1,93 @@
 import os
 import re
 import sys
+from typing import List, Optional, Tuple
+
+# Minimal ANSI colors — kept local so scaffold can run standalone without main.py
+_R     = "\033[0m"
+_BOLD  = "\033[1m"
+_RED   = "\033[31m"
+_YEL   = "\033[33m"
+_GRN   = "\033[32m"
+_DIM   = "\033[2m"
 
 
-def _register_parser(base_dir: str, format_name: str, class_name: str):
+# ── extension helpers ─────────────────────────────────────────────────────────
+
+def parse_extensions(raw: str) -> Tuple[List[str], List[str]]:
+    """
+    Split a comma/space-separated extension string.
+    Returns (valid, invalid) where valid entries match the pattern ^.[a-zA-Z0-9]+$
+    """
+    parts = re.split(r'[,\s]+', raw.strip())
+    valid: List[str] = []
+    invalid: List[str] = []
+    for part in parts:
+        part = part.strip()
+        if not part:
+            continue
+        if re.match(r'^\.[a-zA-Z0-9]+$', part):
+            valid.append(part.lower())
+        else:
+            invalid.append(part)
+    return valid, invalid
+
+
+def check_extension_conflicts(extensions: List[str]) -> List[Tuple[str, str]]:
+    """
+    Return a list of (extension, existing_format) for every extension that is
+    already claimed by a registered parser.
+    """
+    conflicts: List[Tuple[str, str]] = []
+    try:
+        from parsers import ALL_PARSERS
+        for parser in ALL_PARSERS:
+            claimed = [e.lower() for e in parser.extensions]
+            for ext in extensions:
+                if ext in claimed:
+                    conflicts.append((ext, parser.format))
+    except Exception:
+        pass
+    return conflicts
+
+
+def print_conflict_warning(conflicts: List[Tuple[str, str]]) -> None:
+    """Print a prominent red warning box when extensions collide."""
+    W = 62
+    border = _BOLD + _RED + "  ╔" + "═" * W + "╗" + _R
+
+    def row(text: str) -> str:
+        inner = f"  {text}"
+        pad   = W - len(inner)
+        return _BOLD + _RED + "  ║" + _R + inner + " " * max(pad, 0) + _BOLD + _RED + "║" + _R
+
+    def divider() -> str:
+        return _BOLD + _RED + "  ╠" + "═" * W + "╣" + _R
+
+    bottom = _BOLD + _RED + "  ╚" + "═" * W + "╝" + _R
+
+    print()
+    print(border)
+    print(row(_BOLD + _RED + "  ⚠  EXTENSION CONFLICT — READ CAREFULLY" + _R))
+    print(divider())
+    for ext, fmt in conflicts:
+        line = f"  {ext}  is already claimed by: {_BOLD}{fmt}{_R}"
+        print(row(line))
+    print(divider())
+    print(row(""))
+    print(row(_YEL + _BOLD + "  You MUST implement can_handle() so it returns" + _R))
+    print(row(_YEL + _BOLD + "  True ONLY for your format's content signature." + _R))
+    print(row(""))
+    print(row(_YEL + "  Without a precise check the engine will silently" + _R))
+    print(row(_YEL + "  route files to the WRONG parser." + _R))
+    print(row(""))
+    print(bottom)
+    print()
+
+
+# ── internal scaffold helpers ─────────────────────────────────────────────────
+
+def _register_parser(base_dir: str, format_name: str, class_name: str) -> None:
     init_path = os.path.join(base_dir, "parsers", "__init__.py")
     with open(init_path, "r", encoding="utf-8") as f:
         src = f.read()
@@ -15,7 +99,6 @@ def _register_parser(base_dir: str, format_name: str, class_name: str):
         print(f"[!] {class_name}Parser already registered — skipping __init__.py update.")
         return
 
-    # Insert import after the last existing import block line
     lines = src.splitlines(keepends=True)
     last_import_idx = 0
     for i, line in enumerate(lines):
@@ -23,9 +106,8 @@ def _register_parser(base_dir: str, format_name: str, class_name: str):
             last_import_idx = i
     lines.insert(last_import_idx + 1, import_line)
 
-    # Insert instance before the sentinel comment
     src_after = "".join(lines)
-    sentinel = "    # add new parsers here as you implement them\n"
+    sentinel  = "    # add new parsers here as you implement them\n"
     src_after = src_after.replace(sentinel, entry_line + sentinel)
 
     with open(init_path, "w", encoding="utf-8") as f:
@@ -34,16 +116,15 @@ def _register_parser(base_dir: str, format_name: str, class_name: str):
     print(f"[+] Registered {class_name}Parser in parsers/__init__.py")
 
 
-def _create_test_fixture(base_dir: str, format_name: str) -> str:
+def _create_test_fixture(base_dir: str, format_name: str, file_ext: str) -> str:
     """
-    Create the test fixture skeleton for a new format.
-    Returns the path of the created file, or empty string if it already exists.
+    Create the test fixture skeleton.
+    file_ext — extension WITHOUT the leading dot (e.g. "yar").
+    Returns the created filename, or "" if it already existed.
     """
-    fmt_upper = format_name.upper()
-    ext = format_name  # matches the scaffold's default extension
-
+    fmt_upper    = format_name.upper()
     fixture_dir  = os.path.join(base_dir, "tests", "formats", format_name)
-    fixture_name = f"test_{format_name}_rules.{ext}"
+    fixture_name = f"test_{format_name}_rules.{file_ext}"
     fixture_path = os.path.join(fixture_dir, fixture_name)
 
     if os.path.exists(fixture_path):
@@ -80,9 +161,9 @@ def _create_test_fixture(base_dir: str, format_name: str) -> str:
 #
 # Organise rules into the three sections below.
 # Cover at least:
-#   • Well-formed, representative rules            (Valid_)
+#   • Well-formed, representative rules              (Valid_)
 #   • Rules with syntax errors the parser must catch (Invalid_)
-#   • Legal-but-unusual edge cases if relevant     (Nasty_)
+#   • Legal-but-unusual edge cases if relevant       (Nasty_)
 #
 # After filling in rules, update the EXPECTED RESULTS header
 # so the test runner can verify counts automatically.
@@ -122,7 +203,7 @@ def _create_test_fixture(base_dir: str, format_name: str) -> str:
     return fixture_name
 
 
-def _register_test_file(base_dir: str, format_name: str, fixture_filename: str):
+def _register_test_file(base_dir: str, format_name: str, fixture_filename: str) -> None:
     """Insert the new format into TEST_FILES in tests/test_runner.py."""
     runner_path = os.path.join(base_dir, "tests", "test_runner.py")
     with open(runner_path, "r", encoding="utf-8") as f:
@@ -134,7 +215,6 @@ def _register_test_file(base_dir: str, format_name: str, fixture_filename: str):
         print(f"[!] {format_name} already in TEST_FILES — skipping test_runner.py update.")
         return
 
-    # Next available numeric key (reads all active "N": entries)
     keys = [int(k) for k in re.findall(r'"(\d+)"\s*:\s*\(', src)]
     next_key = str(max(keys) + 1) if keys else "1"
 
@@ -143,7 +223,6 @@ def _register_test_file(base_dir: str, format_name: str, fixture_filename: str):
         f'os.path.join(SCRIPT_DIR, "formats", "{format_name}", "{fixture_filename}")),\n'
     )
 
-    # Insert just before the closing } of TEST_FILES
     tf_idx = src.find("TEST_FILES = {")
     if tf_idx == -1:
         print("[!] Cannot find TEST_FILES in test_runner.py — skipping.")
@@ -154,7 +233,7 @@ def _register_test_file(base_dir: str, format_name: str, fixture_filename: str):
         print("[!] Cannot find closing } of TEST_FILES — skipping.")
         return
 
-    insert_pos = tf_idx + m.start() + 1  # points at the } character
+    insert_pos = tf_idx + m.start() + 1
     src = src[:insert_pos] + new_entry + src[insert_pos:]
 
     with open(runner_path, "w", encoding="utf-8") as f:
@@ -163,14 +242,14 @@ def _register_test_file(base_dir: str, format_name: str, fixture_filename: str):
     print(f"[+] Registered {format_name} in tests/test_runner.py (key: {next_key})")
 
 
-def create_parser_template(format_name: str):
+# ── public entry point ────────────────────────────────────────────────────────
+
+def create_parser_template(format_name: str, extensions: Optional[List[str]] = None) -> None:
     format_name = format_name.lower().strip().replace(" ", "_")
 
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    base_dir   = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     target_dir = os.path.join(base_dir, "parsers", "formats")
-
-    filename = f"{format_name}_parser.py"
-    filepath = os.path.join(target_dir, filename)
+    filepath   = os.path.join(target_dir, f"{format_name}_parser.py")
 
     if os.path.exists(filepath):
         print(f"[-] ERROR: Parser for '{format_name}' already exists at:")
@@ -178,9 +257,24 @@ def create_parser_template(format_name: str):
         print("[-] Aborting to prevent accidental overwrite.")
         return
 
-    os.makedirs(target_dir, exist_ok=True)
+    # Resolve extensions — default to [".{format_name}"] when none provided
+    if not extensions:
+        extensions = [f".{format_name}"]
+        user_provided = False
+    else:
+        user_provided = True
 
-    class_name = "".join(w.capitalize() for w in format_name.split("_"))
+    # Conflict check — always run so callers are warned
+    conflicts = check_extension_conflicts(extensions)
+    if conflicts:
+        print_conflict_warning(conflicts)
+
+    os.makedirs(target_dir, exist_ok=True)
+    class_name  = "".join(w.capitalize() for w in format_name.split("_"))
+    ext_repr    = repr(extensions)  # e.g. ['.yar', '.yara']
+
+    # Whether the TODO comment stays depends on whether the user set real extensions
+    ext_comment = "" if user_provided else "  # TODO: set the correct extensions\n        "
 
     template = f"""\
 import re
@@ -197,8 +291,7 @@ class {class_name}Parser(BaseRuleParser):
 
     @property
     def extensions(self) -> List[str]:
-        # TODO: set the correct extensions
-        return [".{format_name}"]
+        {ext_comment}return {ext_repr}
 
     def can_handle(self, chunk: str) -> bool:
         # TODO: return True if chunk looks like a {format_name.upper()} rule
@@ -246,7 +339,8 @@ class {class_name}Parser(BaseRuleParser):
     print(f"[+] Created parser: {filepath}")
     _register_parser(base_dir, format_name, class_name)
 
-    fixture_filename = _create_test_fixture(base_dir, format_name)
+    file_ext         = extensions[0].lstrip(".")
+    fixture_filename = _create_test_fixture(base_dir, format_name, file_ext)
     if fixture_filename:
         _register_test_file(base_dir, format_name, fixture_filename)
 
@@ -254,13 +348,14 @@ class {class_name}Parser(BaseRuleParser):
     print(f"[!] Next steps:")
     print(f"    1. Implement can_handle(), split_rules(), validate(), parse(), normalize()")
     print(f"       in parsers/formats/{format_name}_parser.py")
-    print(f"    2. Fill in test rules in tests/formats/{format_name}/test_{format_name}_rules.{format_name}")
+    print(f"    2. Fill in test rules in tests/formats/{format_name}/test_{format_name}_rules.{file_ext}")
     print(f"    3. Update the EXPECTED RESULTS header in the test fixture")
     print(f"    4. Run: python3 main.py test → choose {format_name} → file")
 
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: python3 -m utils.scaffold <format_name>")
+        print("Usage: python3 -m utils.scaffold <format_name> [.ext1 .ext2 ...]")
     else:
-        create_parser_template(sys.argv[1])
+        exts = sys.argv[2:] if len(sys.argv) > 2 else None
+        create_parser_template(sys.argv[1], exts or None)
