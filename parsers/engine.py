@@ -106,12 +106,21 @@ class RuleCastEngine:
         return self.process(content, format_name)
 
     def list_parsers(self) -> List[Dict[str, Any]]:
-        """Return info about all registered parsers."""
-        return [
-            {
-                "format": p.format,
-                "extensions": p.extensions,
-                "class": p.__class__.__name__,
-            }
-            for p in self.parsers
-        ]
+        """Return info about all registered parsers (includes display metadata)."""
+        from parsers.formats_manifest import FORMAT_METADATA
+        result = []
+        for p in self.parsers:
+            meta = FORMAT_METADATA.get(p.format.lower(), {})
+            result.append({
+                'format':          p.format,
+                'display_name':    meta.get('display_name', p.format.upper()),
+                'description':     meta.get('description', ''),
+                'icon':            meta.get('icon', 'fa-file-code'),
+                'color':           meta.get('color', '#888888'),
+                'file_extension':  meta.get('file_extension',
+                                            p.extensions[0].lstrip('.') if p.extensions else ''),
+                'all_extensions':  p.extensions,
+                'can_be_executed': meta.get('can_be_executed', False),
+                'class':           p.__class__.__name__,
+            })
+        return result

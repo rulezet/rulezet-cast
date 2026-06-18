@@ -159,9 +159,15 @@ def _read_input(text: Optional[str], filepath: Optional[str]) -> str:
 
 # ── commands ──────────────────────────────────────────────────────────────────
 
-def cmd_list(_args):
+def cmd_list(args):
     engine = get_engine()
     parsers = engine.list_parsers()
+
+    as_json = getattr(args, 'json', False) if args else False
+    if as_json:
+        print(json.dumps(parsers, indent=2))
+        return
+
     print()
     print(c("  Registered parsers", BOLD))
     print(c("  " + "─" * 40, DIM))
@@ -169,7 +175,7 @@ def cmd_list(_args):
         warn("No parsers registered.")
         return
     for p in parsers:
-        exts = "  ".join(p["extensions"])
+        exts = "  ".join(p["all_extensions"])
         print(
             f"  {c('●', CYAN)}  {c(p['format'].ljust(12), BOLD, WHITE)}"
             f"  {c(exts, DIM)}"
@@ -590,7 +596,8 @@ def build_parser() -> argparse.ArgumentParser:
     grp3.add_argument("-i", "--input", metavar="FILE", help="Path to rule file")
 
     # list
-    sub.add_parser("list", help="List all registered parsers")
+    sl = sub.add_parser("list", help="List all registered parsers")
+    sl.add_argument("--json", action="store_true", help="Output machine-readable JSON")
 
     # new
     sn = sub.add_parser("new", help="Scaffold a new parser")
