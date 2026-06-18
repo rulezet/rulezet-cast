@@ -207,35 +207,62 @@ def cmd_validate(args):
         err("No content. Use -t or -i.")
         return
 
-    engine = get_engine()
-    fmt = getattr(args, "format", None)
+    engine  = get_engine()
+    fmt     = getattr(args, "format", None)
+    as_json = getattr(args, "json", False)
 
     try:
         parser = engine.get_parser(fmt) if fmt else engine.detect_format(content)
         if not parser:
-            err(f"Unknown or undetectable format: {fmt or '(auto)'}")
+            if as_json:
+                print(json.dumps({"available": False, "error": f"Unknown format: {fmt or '(auto)'}"}))
+            else:
+                err(f"Unknown or undetectable format: {fmt or '(auto)'}")
             return
 
-        rules = parser.split_rules(content)
+        rules        = parser.split_rules(content)
+        rule_results = []
+        valid        = 0
+
+        for i, raw in enumerate(rules, 1):
+            result     = parser.validate(raw)
+            name_match = None
+            try:
+                parsed     = parser.parse(raw)
+                name_match = parsed.get("identity", {}).get("name") or parsed.get("title")
+            except Exception:
+                pass
+            label = name_match or f"rule_{i}"
+            rule_results.append({
+                "name":     label,
+                "ok":       result.ok,
+                "errors":   result.errors,
+                "warnings": result.warnings,
+            })
+            if result.ok:
+                valid += 1
+
+        if as_json:
+            print(json.dumps({
+                "available": True,
+                "format":    parser.format,
+                "total":     len(rules),
+                "valid":     valid,
+                "invalid":   len(rules) - valid,
+                "ok":        valid == len(rules),
+                "rules":     rule_results,
+            }))
+            return
+
         print()
         info(f"Format   : {c(parser.format, BOLD)}")
         info(f"Rules    : {c(len(rules), BOLD)}")
         print(c("  " + "─" * 40, DIM))
-
-        valid = 0
-        for i, raw in enumerate(rules, 1):
-            result = parser.validate(raw)
-            name_match = None
-            try:
-                parsed = parser.parse(raw)
-                name_match = parsed.get("identity", {}).get("name") or parsed.get("title")
-            except Exception:
-                pass
-            label = name_match or f"rule #{i}"
-            _print_validation(result, label)
-            if result.ok:
-                valid += 1
-
+        for r in rule_results:
+            _print_validation(
+                type("_R", (), {"ok": r["ok"], "errors": r["errors"], "warnings": r["warnings"]})(),
+                r["name"],
+            )
         print()
         if valid == len(rules):
             ok(f"All {valid}/{len(rules)} rules valid.")
@@ -245,7 +272,10 @@ def cmd_validate(args):
         print()
 
     except ValueError as e:
-        err(str(e))
+        if as_json:
+            print(json.dumps({"available": False, "error": str(e)}))
+        else:
+            err(str(e))
 
 
 def cmd_parse(args):
@@ -588,6 +618,7 @@ def build_parser() -> argparse.ArgumentParser:
     grp2.add_argument("-t", "--text",  help="Raw rule text")
     grp2.add_argument("-i", "--input", metavar="FILE", help="Path to rule file")
     sv.add_argument("-f", "--format",  help="Force a specific format")
+    sv.add_argument("--json", action="store_true", help="Output machine-readable JSON")
 
     # detect
     sd = sub.add_parser("detect", help="Auto-detect rule format")
