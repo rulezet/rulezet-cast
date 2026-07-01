@@ -8,6 +8,25 @@
 # Layout: the FIRST line of each chunk (right after ---) is:
 #     # format: <name>
 # The test runner strips that directive before calling detect_format().
+#
+# Coverage (14 chunks):
+#   1-3   ATR  — canonical id / agent_source-only / category-taxonomy-only
+#   4-6   Sigma — baseline, no ATR signals present
+#   7     ATR  — sovereign-prefixed id (ATR-XX-YYYY-NNNNN, spec-reserved form)
+#   8     ATR  — no id, no ATR-only keys; detected via detection-shape layer only
+#   9     Sigma — near-miss: id LOOKS ATR-shaped as a bare string but is not
+#                 in the id: field, and no ATR-only keys/category are present
+#   10    Sigma — near-miss: id: field is ATR-shaped but truncated (4-digit
+#                 suffix, not 5) — must NOT match the id regex, and no
+#                 ATR-only keys are present either, so it must fall to Sigma
+#   11    ATR  — schema_version-only signal (no id, no agent_source, no
+#                 category, no detection block yet — exercises layer 2
+#                 independently of the other three ATR-only keys)
+#   12    ATR  — detection_tier-only signal (same rationale as #11)
+#   13    ATR  — maturity-only signal (same rationale as #11)
+#   14    Sigma — logsource.category value collides textually with the word
+#                 "category" but the value itself (process_creation) is not
+#                 in the ATR taxonomy enum — must stay Sigma
 # ============================================================
 
 ---
@@ -116,4 +135,126 @@ detection:
     TargetFilename|endswith:
       - '.exe'
       - '.dll'
+  condition: selection
+
+---
+# format: atr
+# Sovereign-prefixed id (ATR-XX-YYYY-NNNNN) — reserved form per
+# ATR Rule Format Spec §2 / atr-event-v1.0 §"atr.rule_id". No rule in the
+# public corpus uses this form yet, but can_handle() must not silently drop
+# it once a sovereign deployment starts minting these ids.
+id: ATR-TW-2026-00001
+title: "Sovereign-Prefixed Rule — Regional Deployment Marker"
+description: "Detected via ATR-XX-YYYY-NNNNN sovereign id form."
+severity: high
+author: "ATR Community"
+tags:
+  category: prompt-injection
+agent_source:
+  type: llm_io
+detection:
+  condition: any
+  conditions:
+    - field: user_input
+      operator: contains
+      value: "sovereign test marker"
+
+---
+# format: atr
+# No id field, no ATR-only keys (schema_version / detection_tier / maturity /
+# agent_source) and no whitelisted tags.category value. Detected purely via
+# the layer-3 detection-shape signal: `condition: any|all|or|and` together
+# with a `conditions:` list — a shape Sigma never produces (Sigma's
+# `condition:` is a boolean expression string referencing named selections,
+# never paired with a `conditions:` list).
+title: "Bare Detection-Shape Rule — No Id, No Metadata Keys"
+description: "Exercises the deepest fallback layer in can_handle()."
+detection:
+  condition: all
+  conditions:
+    - field: tool_output
+      operator: contains
+      value: "unexpected shape probe"
+    - field: tool_output
+      operator: contains
+      value: "second condition"
+
+---
+# format: sigma
+# Near-miss: an ATR-shaped id string appears in the DESCRIPTION text, not in
+# the id: field. The id: field itself is a standard Sigma UUIDv4, and none of
+# the ATR-only keys or the whitelisted category enum are present. Must still
+# resolve to Sigma — can_handle() only scans the id: field's own line, never
+# free text elsewhere in the document.
+title: "Suspicious Reference To ATR-2026-00001 In Free Text"
+id: d4e5f6a7-b8c9-0123-def0-1234567890ab
+status: experimental
+description: "This description happens to mention ATR-2026-00001 as a citation, not as this rule's own id."
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: '\cmd.exe'
+  condition: selection
+
+---
+# format: sigma
+# Near-miss: the id: field is ATR-shaped but truncated — a 4-digit suffix
+# instead of 5 (ATR-2026-0001, not ATR-2026-00001). Must NOT match the id
+# regex (\d{5} requires exactly 5 digits). No ATR-only keys or whitelisted
+# category are present, so it correctly falls through to Sigma.
+title: "Truncated Pseudo-ATR Id — Must Not Match Id Regex"
+id: ATR-2026-0001
+status: stable
+description: "id: field looks ATR-ish at a glance but breaks the ATR-YYYY-NNNNN grammar (4 digits, not 5)."
+logsource:
+  category: network_connection
+  product: linux
+detection:
+  selection:
+    dst_port: 4444
+  condition: selection
+
+---
+# format: atr
+# schema_version present in isolation — no id, no agent_source, no
+# whitelisted category, no detection block. Exercises layer 2's
+# schema_version arm independently of the other three ATR-only keys.
+schema_version: "1.1"
+title: "Schema-Version-Only Signal"
+description: "Detected via schema_version key alone."
+
+---
+# format: atr
+# detection_tier present in isolation — same rationale as the
+# schema_version-only chunk above, exercising a different ATR-only key.
+detection_tier: pattern
+title: "Detection-Tier-Only Signal"
+description: "Detected via detection_tier key alone."
+
+---
+# format: atr
+# maturity present in isolation — same rationale, third ATR-only key.
+maturity: test
+title: "Maturity-Only Signal"
+description: "Detected via maturity key alone."
+
+---
+# format: sigma
+# The word "category" appears as a nested logsource key, and its value
+# (process_creation) textually contains no ATR taxonomy term — confirms the
+# category whitelist (not a bare "category:" keyword match) is what keeps
+# this excluded, even though logsource: also starts with a key that could be
+# confused for an ATR-only key by a careless regex.
+title: "Logsource Category Key Coincidence — Must Not Trip ATR Category Enum"
+id: e5f6a7b8-c9d0-1234-ef01-234567890abc
+status: stable
+description: "logsource.category is process_creation, not an ATR taxonomy value — must stay Sigma."
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: '\rundll32.exe'
   condition: selection
