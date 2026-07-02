@@ -4,7 +4,14 @@ from typing import Any, Dict, List
 from parsers.base import BaseRuleParser, ValidationResult
 
 _CVE_RE = re.compile(r'CVE-\d{4}-\d{4,7}', re.IGNORECASE)
-_ATR_ID_RE = re.compile(r'^ATR-\d{4}-\d{5}$')
+
+# Canonical ATR rule ID grammar (ATR Rule Format Spec § 2):
+#   ATR-YYYY-NNNNN       canonical rules
+#   ATR-XX-YYYY-NNNNN    sovereign-prefixed rules (2-letter region/org code)
+_ATR_ID_RE = re.compile(r'^ATR-(?:[A-Z]{2}-)?\d{4}-\d{5}$')
+
+# Same grammar, anchored for single-line can_handle() scanning (id: <value> on its own line).
+_ATR_ID_LINE_RE = re.compile(r'^\s*id\s*:\s*["\']?ATR-(?:[A-Z]{2}-)?\d{4}-\d{5}\b', re.MULTILINE)
 
 _ATR_CATEGORIES = frozenset({
     'prompt-injection', 'tool-poisoning', 'skill-compromise',
@@ -14,15 +21,64 @@ _ATR_CATEGORIES = frozenset({
 _ATR_SEVERITIES = frozenset({'critical', 'high', 'medium', 'low'})
 _ATR_AGENT_SOURCE_TYPES = frozenset({'llm_io', 'tool_call', 'skill_manifest', 'agent_loop'})
 
-# Signals unique to ATR among YAML-based formats (must not match Sigma)
-_ATR_CAN_HANDLE = re.compile(
-    r'^\s*id\s*:\s*ATR-\d{4}-\d{5}\b'
-    r'|^\s*agent_source\s*:'
-    r'|^\s*category\s*:\s*(?:prompt-injection|tool-poisoning|skill-compromise'
-    r'|agent-manipulation|context-exfiltration|data-poisoning'
-    r'|excessive-autonomy|model-abuse|model-security|privilege-escalation)',
+# ── can_handle() signal layers ──────────────────────────────────────────────
+#
+# Both ATR and Sigma are YAML, so can_handle() must discriminate on content,
+# not extension. Three layers, cheapest/most-decisive first:
+#
+#   1. id regex          — ATR-YYYY-NNNNN / ATR-XX-YYYY-NNNNN. Sigma ids are
+#                           UUIDv4, so this alone resolves ~all real rules.
+#   2. ATR-only keys      — schema_version, detection_tier, maturity,
+#                           agent_source: none of these appear in Sigma.
+#   3. detection shape     — ATR detection is {condition: any|all|or|and,
+#                           conditions: [{field, operator, value}, …]} — a
+#                           typed match-object list. Sigma detection uses
+#                           named search-identifier blocks + a condition
+#                           *expression string* (e.g. "selection and not
+#                           filter"), never a `conditions:` list.
+#
+# Layer 2 keys are checked independently (any one present => ATR) rather than
+# folded into one alternation, so a future rule missing one key is still
+# caught by the others — this is deliberately more redundant than the
+# id-only check that shipped in the first cut of this parser.
+_ATR_ONLY_KEY_RE = re.compile(
+    r'^\s*(?:schema_version|detection_tier|maturity|agent_source)\s*:',
     re.MULTILINE,
 )
+
+# tags.category restricted to the canonical 10-category ATR taxonomy, so a
+# Sigma rule whose logsource.category happens to be a nested "category:" key
+# (e.g. logsource: {category: process_creation}) can never collide — Sigma's
+# logsource categories don't overlap this enum.
+_ATR_CATEGORY_KEY_RE = re.compile(
+    r'^\s*category\s*:\s*(?:prompt-injection|tool-poisoning|skill-compromise'
+    r'|agent-manipulation|context-exfiltration|data-poisoning'
+    r'|excessive-autonomy|model-abuse|model-security|privilege-escalation)\b',
+    re.MULTILINE,
+)
+
+# Sigma's condition is a boolean expression *string* referencing named
+# selections (e.g. "selection and not filter"). ATR's condition is always
+# exactly any|all|or|and, paired with a conditions: *list*. A rule that has
+# both signals at once cannot be a Sigma rule.
+_ATR_CONDITION_ENUM_RE = re.compile(r'^\s*condition\s*:\s*["\']?(?:any|all|or|and)\s*["\']?\s*$', re.MULTILINE)
+_ATR_CONDITIONS_LIST_RE = re.compile(r'^\s*conditions\s*:\s*$', re.MULTILINE)
+
+
+def _atr_can_handle(chunk: str) -> bool:
+    """Three-layer ATR signal check — see module docstring above."""
+    # Layer 1: canonical or sovereign-prefixed id
+    if _ATR_ID_LINE_RE.search(chunk):
+        return True
+    # Layer 2: any ATR-only key, or the whitelisted category enum
+    if _ATR_ONLY_KEY_RE.search(chunk) or _ATR_CATEGORY_KEY_RE.search(chunk):
+        return True
+    # Layer 3: detection shape — condition enum value AND a conditions: list,
+    # both present. Neither alone is decisive (e.g. Sigma has no `condition:
+    # any` value, but checking only the list would be too weak on its own).
+    if _ATR_CONDITION_ENUM_RE.search(chunk) and _ATR_CONDITIONS_LIST_RE.search(chunk):
+        return True
+    return False
 
 
 class ATRParser(BaseRuleParser):
@@ -30,8 +86,14 @@ class ATRParser(BaseRuleParser):
     Parser for Agent Threat Rules (ATR) — YAML-based detection rules for AI
     agent threats (.yaml / .yml).
 
-    Rules carry a stable identifier ATR-YYYY-NNNNN and cover ten attack
-    categories (prompt-injection, tool-poisoning, context-exfiltration, …).
+    Rules carry a stable identifier ATR-YYYY-NNNNN (or the sovereign-prefixed
+    ATR-XX-YYYY-NNNNN) and cover ten attack categories (prompt-injection,
+    tool-poisoning, context-exfiltration, …).
+
+    can_handle(): three-layer discriminator against Sigma, which also uses
+    .yaml/.yml — id regex, then ATR-only keys (schema_version,
+    detection_tier, maturity, agent_source), then detection-shape. See the
+    layer comments above _atr_can_handle() for the full rationale.
 
     Validation: YAML parse + semantic checks (id pattern, severity enum,
     tags.category taxonomy, agent_source.type, detection.conditions shape).
@@ -51,7 +113,7 @@ class ATRParser(BaseRuleParser):
         return ['.yaml', '.yml']
 
     def can_handle(self, chunk: str) -> bool:
-        return bool(_ATR_CAN_HANDLE.search(chunk))
+        return _atr_can_handle(chunk)
 
     def split_rules(self, raw_content: str) -> List[str]:
         parts = re.split(r'^---\s*$', raw_content, flags=re.MULTILINE)
@@ -89,7 +151,10 @@ class ATRParser(BaseRuleParser):
         if not isinstance(rule_id, str):
             errors.append("Missing or non-string required field: id")
         elif not _ATR_ID_RE.match(rule_id):
-            errors.append(f"Rule id {rule_id!r} does not match pattern ATR-YYYY-NNNNN")
+            errors.append(
+                f"Rule id {rule_id!r} does not match pattern ATR-YYYY-NNNNN "
+                f"(or sovereign-prefixed ATR-XX-YYYY-NNNNN)"
+            )
 
         # title
         title = doc.get('title')
